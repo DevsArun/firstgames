@@ -1,0 +1,145 @@
+/* Neon Drift Rush - styles. Mobile-first, fluid, no external fonts (fast load). */
+* { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+:root {
+  --bg: #0a0a1a;
+  --neon: #00f0ff;
+  --neon2: #ff2bd6;
+  --accent: #ffe600;
+  --text: #eaf6ff;
+}
+html, body {
+  width: 100%; height: 100%; overflow: hidden;
+  background: var(--bg); color: var(--text);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  user-select: none; -webkit-user-select: none;
+  touch-action: none;
+}
+#game-root {
+  position: fixed; inset: 0;
+  display: flex; align-items: center; justify-content: center;
+  background: radial-gradient(circle at 50% 30%, #16163a 0%, #0a0a1a 70%);
+}
+#game-canvas { display: block; width: 100%; height: 100%; }
+
+/* Overlays */
+.overlay {
+  position: absolute; inset: 0;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 18px; text-align: center; padding: 24px;
+  background: rgba(6, 6, 20, 0.55);
+  backdrop-filter: blur(2px);
+  z-index: 10;
+}
+.overlay.hidden, .hidden { display: none !important; }
+
+.logo {
+  font-size: clamp(28px, 9vw, 64px); font-weight: 900; letter-spacing: 2px;
+  line-height: 1; text-shadow: 0 0 18px var(--neon);
+  color: #fff;
+}
+.logo span { color: var(--neon2); text-shadow: 0 0 18px var(--neon2); }
+
+/* Buttons */
+.btn {
+  border: none; cursor: pointer; font-weight: 800; letter-spacing: 1px;
+  border-radius: 14px; padding: 16px 40px; font-size: clamp(16px, 4.5vw, 22px);
+  color: #06121a; transition: transform .08s ease, box-shadow .2s ease;
+  min-width: 180px;
+}
+.btn:active { transform: scale(0.95); }
+.btn-primary {
+  background: linear-gradient(135deg, var(--neon), #00b4ff);
+  box-shadow: 0 0 24px rgba(0, 240, 255, 0.55);
+}
+.btn-reward {
+  background: linear-gradient(135deg, var(--accent), #ffb300); color: #1a1400;
+  box-shadow: 0 0 24px rgba(255, 230, 0, 0.5);
+}
+.btn-ghost {
+  background: rgba(255,255,255,0.08); color: var(--text);
+  border: 1px solid rgba(255,255,255,0.18); box-shadow: none;
+  min-width: auto; padding: 14px 24px;
+}
+.menu-row { display: flex; gap: 12px; }
+.menu-best { font-size: clamp(16px, 4vw, 20px); opacity: .85; }
+.streak-pill {
+  margin-top: 8px; font-size: 13px; opacity: .8;
+  background: rgba(255,255,255,0.06); padding: 8px 16px; border-radius: 999px;
+}
+.streak-pill b { color: var(--accent); }
+
+/* Panel */
+.panel {
+  background: rgba(14, 14, 38, 0.92);
+  border: 1px solid rgba(0, 240, 255, 0.25);
+  border-radius: 20px; padding: 28px 26px; max-width: 360px; width: 100%;
+  display: flex; flex-direction: column; gap: 14px; align-items: center;
+  box-shadow: 0 0 40px rgba(0,240,255,0.15);
+}
+.panel h2 { font-size: clamp(24px, 7vw, 36px); letter-spacing: 2px; }
+.go-stats { display: flex; gap: 30px; }
+.go-stat { display: flex; flex-direction: column; }
+.go-label { font-size: 12px; opacity: .6; letter-spacing: 2px; }
+.go-val { font-size: clamp(28px, 8vw, 40px); font-weight: 900; color: var(--neon); }
+.go-newbest { color: var(--accent); font-weight: 900; letter-spacing: 2px; animation: pulse 1s infinite; }
+.go-coins { color: var(--accent); font-weight: 700; }
+@keyframes pulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:.6;transform:scale(1.08)} }
+
+/* HUD */
+#hud { position: absolute; inset: 0; z-index: 8; pointer-events: none; }
+.hud-top {
+  position: absolute; top: 0; left: 0; right: 0;
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 16px 18px; gap: 12px;
+}
+.hud-score { font-size: clamp(22px, 6vw, 32px); font-weight: 900; text-shadow: 0 0 12px var(--neon); }
+.hud-coins { font-size: clamp(15px, 4vw, 18px); color: var(--accent); font-weight: 700; }
+.hud-pause {
+  pointer-events: auto; background: rgba(255,255,255,0.1); color: #fff;
+  border: 1px solid rgba(255,255,255,0.2); border-radius: 10px;
+  width: 44px; height: 44px; font-weight: 900; cursor: pointer; letter-spacing: 2px;
+}
+.tutorial-hint {
+  position: absolute; left: 50%; top: 60%; transform: translateX(-50%);
+  display: flex; flex-direction: column; align-items: center; gap: 8px;
+}
+.finger { font-size: 48px; animation: swipe 1.4s ease-in-out infinite; }
+.tut-text { font-size: 16px; opacity: .85; letter-spacing: 1px; }
+@keyframes swipe { 0%,100%{transform:translateX(-30px)} 50%{transform:translateX(30px)} }
+.combo-popup {
+  position: absolute; left: 50%; top: 34%; transform: translateX(-50%);
+  font-size: clamp(20px, 6vw, 30px); font-weight: 900; color: var(--accent);
+  text-shadow: 0 0 14px var(--accent); opacity: 0;
+}
+.combo-popup.show { animation: comboPop .8s ease-out; }
+@keyframes comboPop { 0%{opacity:0;transform:translate(-50%,10px) scale(.6)} 30%{opacity:1;transform:translate(-50%,0) scale(1.1)} 100%{opacity:0;transform:translate(-50%,-20px) scale(1)} }
+
+/* Skins */
+.skins-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; width: 100%; }
+.skin-cell {
+  aspect-ratio: 1; border-radius: 14px; border: 2px solid rgba(255,255,255,0.15);
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px;
+  cursor: pointer; background: rgba(255,255,255,0.04); position: relative; font-size: 12px;
+}
+.skin-cell.selected { border-color: var(--neon); box-shadow: 0 0 16px rgba(0,240,255,0.5); }
+.skin-cell.locked { opacity: .8; }
+.skin-swatch { width: 40%; height: 40%; border-radius: 50%; }
+.skin-price { font-size: 11px; color: var(--accent); }
+.coins-bal { color: var(--accent); font-weight: 700; }
+
+/* Achievement toast */
+.ach-toast {
+  position: absolute; top: 14px; left: 50%; transform: translateX(-50%);
+  display: flex; align-items: center; gap: 10px; z-index: 20;
+  background: rgba(14,14,38,0.96); border: 1px solid var(--accent);
+  border-radius: 12px; padding: 10px 16px; box-shadow: 0 0 22px rgba(255,230,0,0.35);
+  animation: toastIn .4s ease-out;
+}
+.ach-icon { font-size: 26px; }
+.ach-title { font-size: 12px; color: var(--accent); font-weight: 800; letter-spacing: 1px; }
+.ach-desc { font-size: 13px; }
+@keyframes toastIn { from{opacity:0;transform:translate(-50%,-20px)} to{opacity:1;transform:translate(-50%,0)} }
+
+/* Loader */
+.loader-bar { width: 200px; height: 8px; background: rgba(255,255,255,0.1); border-radius: 999px; overflow: hidden; }
+.loader-fill { width: 0%; height: 100%; background: linear-gradient(90deg, var(--neon), var(--neon2)); transition: width .2s ease; }

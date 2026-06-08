@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <meta name="theme-color" content="#0a0a1a" />
+  <title>Neon Drift Rush - Free Online Dodge Game</title>
+  <meta name="description" content="Neon Drift Rush is a fast endless dodge game. Steer through neon obstacles, beat your high score. Free, no download, instant play." />
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+  <div id="game-root">
+    <canvas id="game-canvas"></canvas>
+
+    <!-- Loading -->
+    <div id="loading-screen" class="overlay">
+      <div class="logo">NEON<span>DRIFT</span>RUSH</div>
+      <div class="loader-bar"><div class="loader-fill"></div></div>
+    </div>
+
+    <!-- Main Menu -->
+    <div id="menu-screen" class="overlay hidden">
+      <div class="logo">NEON<span>DRIFT</span>RUSH</div>
+      <div class="menu-best">Best: <span id="menu-best-score">0</span> m</div>
+      <button id="play-btn" class="btn btn-primary">PLAY</button>
+      <div class="menu-row">
+        <button id="skins-btn" class="btn btn-ghost">SKINS</button>
+        <button id="mute-btn" class="btn btn-ghost" aria-label="sound">&#128266;</button>
+      </div>
+      <div class="streak-pill" id="streak-pill">Day streak: <b id="streak-count">1</b></div>
+    </div>
+
+    <!-- In-game HUD -->
+    <div id="hud" class="hidden">
+      <div class="hud-top">
+        <div class="hud-score"><span id="hud-distance">0</span> m</div>
+        <div class="hud-coins">&#9679; <span id="hud-coins">0</span></div>
+        <button id="pause-btn" class="hud-pause" aria-label="pause">II</button>
+      </div>
+      <div id="tutorial-hint" class="tutorial-hint hidden">
+        <div class="finger">&#128072;</div>
+        <div class="tut-text">Steer to dodge</div>
+      </div>
+      <div id="combo-popup" class="combo-popup"></div>
+    </div>
+
+    <!-- Pause -->
+    <div id="pause-screen" class="overlay hidden">
+      <div class="panel">
+        <h2>PAUSED</h2>
+        <button id="resume-btn" class="btn btn-primary">RESUME</button>
+        <button id="quit-btn" class="btn btn-ghost">QUIT</button>
+      </div>
+    </div>
+
+    <!-- Game Over -->
+    <div id="gameover-screen" class="overlay hidden">
+      <div class="panel">
+        <h2 id="go-title">CRASHED!</h2>
+        <div class="go-stats">
+          <div class="go-stat"><span class="go-label">SCORE</span><span id="go-score" class="go-val">0</span></div>
+          <div class="go-stat"><span class="go-label">BEST</span><span id="go-best" class="go-val">0</span></div>
+        </div>
+        <div id="go-newbest" class="go-newbest hidden">NEW BEST!</div>
+        <div id="go-coins" class="go-coins">&#9679; +0</div>
+        <button id="retry-btn" class="btn btn-primary">RETRY</button>
+        <button id="revive-btn" class="btn btn-reward hidden">&#9654; REVIVE (Ad)</button>
+        <button id="menu-btn" class="btn btn-ghost">MENU</button>
+      </div>
+    </div>
+
+    <!-- Skins -->
+    <div id="skins-screen" class="overlay hidden">
+      <div class="panel">
+        <h2>SKINS</h2>
+        <div class="coins-bal">&#9679; <span id="skins-coins">0</span></div>
+        <div id="skins-grid" class="skins-grid"></div>
+        <button id="skins-back-btn" class="btn btn-ghost">BACK</button>
+      </div>
+    </div>
+
+    <!-- Achievement toast -->
+    <div id="ach-toast" class="ach-toast hidden">
+      <div class="ach-icon">&#127894;</div>
+      <div class="ach-body"><div class="ach-title">Achievement!</div><div id="ach-desc" class="ach-desc"></div></div>
+    </div>
+  </div>
+
+  <!-- Scripts: ordered, no build step -->
+  <script src="js/config.js"></script>
+  <script src="js/utils.js"></script>
+  <script src="js/audio.js"></script>
+  <script src="js/input.js"></script>
+  <script src="js/particles.js"></script>
+  <script src="js/player.js"></script>
+  <script src="js/world.js"></script>
+  <script src="js/achievements.js"></script>
+  <script src="js/ui.js"></script>
+  <script src="js/game.js"></script>
+  <script src="js/main.js"></script>
+</body>
+</html>
