@@ -32,25 +32,62 @@
 
     <!-- Main Menu -->
     <div id="menu-screen" class="overlay hidden">
-      <div class="logo logo-xl">NEON<span>DRIFT</span>RUSH</div>
+      <div class="menu-card">
+        <div class="orb-preview" id="orb-preview" aria-hidden="true"></div>
+        <div class="logo logo-xl">NEON<span>DRIFT</span>RUSH</div>
+        <div class="tagline">Dodge. Drift. Don't crash.</div>
 
-      <!-- challenge banner appears only when arriving via a friend's link -->
-      <div id="challenge-banner" class="challenge-banner hidden">
-        <div class="cb-icon">&#9876;&#65039;</div>
-        <div class="cb-text"><b id="cb-name">A friend</b> challenged you to beat <b id="cb-score">0</b> m</div>
+        <!-- challenge banner appears only when arriving via a friend's link -->
+        <div id="challenge-banner" class="challenge-banner hidden">
+          <div class="cb-icon">&#9876;&#65039;</div>
+          <div class="cb-text"><b id="cb-name">A friend</b> challenged you to beat <b id="cb-score">0</b> m</div>
+        </div>
+
+        <div class="menu-best">Best <b id="menu-best-score">0</b> m</div>
+
+        <button id="play-btn" class="btn btn-primary btn-glow btn-big">&#9654; PLAY</button>
+
+        <div class="menu-row">
+          <button id="howto-btn" class="btn btn-ghost">&#10067; HOW TO PLAY</button>
+          <button id="leaderboard-btn" class="btn btn-ghost">&#127942; RANKS</button>
+        </div>
+        <div class="menu-row">
+          <button id="skins-btn" class="btn btn-ghost">&#127912; SKINS</button>
+          <button id="mute-btn" class="btn btn-ghost icon-btn" aria-label="sound">&#128266;</button>
+        </div>
+
+        <div class="streak-pill" id="streak-pill">&#128293; Day streak: <b id="streak-count">1</b></div>
       </div>
+    </div>
 
-      <div class="menu-best">Best <b id="menu-best-score">0</b> m</div>
-
-      <button id="play-btn" class="btn btn-primary btn-glow">PLAY</button>
-
-      <div class="menu-row">
-        <button id="leaderboard-btn" class="btn btn-ghost">&#127942; RANKS</button>
-        <button id="skins-btn" class="btn btn-ghost">&#127912; SKINS</button>
-        <button id="mute-btn" class="btn btn-ghost icon-btn" aria-label="sound">&#128266;</button>
+    <!-- How To Play guide -->
+    <div id="guide-screen" class="overlay hidden">
+      <div class="panel">
+        <h2>HOW TO PLAY</h2>
+        <div class="guide-list">
+          <div class="guide-item">
+            <div class="guide-ic">&#128241;</div>
+            <div class="guide-tx"><b>Mobile:</b> Touch &amp; drag left / right to steer the orb.</div>
+          </div>
+          <div class="guide-item">
+            <div class="guide-ic">&#9000;&#65039;</div>
+            <div class="guide-tx"><b>Desktop:</b> Use &larr; &rarr; arrows or A / D keys.</div>
+          </div>
+          <div class="guide-item">
+            <div class="guide-ic">&#128293;</div>
+            <div class="guide-tx">Dodge the pink walls. Slip through the gaps!</div>
+          </div>
+          <div class="guide-item">
+            <div class="guide-ic">&#9679;</div>
+            <div class="guide-tx">Grab coins to unlock new skins.</div>
+          </div>
+          <div class="guide-item">
+            <div class="guide-ic">&#9889;</div>
+            <div class="guide-tx">Near-misses build combos. Speed rises &mdash; survive longer!</div>
+          </div>
+        </div>
+        <button id="guide-ok-btn" class="btn btn-primary btn-glow">GOT IT &#9654;</button>
       </div>
-
-      <div class="streak-pill" id="streak-pill">&#128293; Day streak: <b id="streak-count">1</b></div>
     </div>
 
     <!-- In-game HUD -->

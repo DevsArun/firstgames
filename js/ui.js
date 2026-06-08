@@ -15,6 +15,8 @@
         loading: $('loading-screen'),
         loaderFill: document.querySelector('.loader-fill'),
         menu: $('menu-screen'),
+        guide: $('guide-screen'),
+        orbPreview: $('orb-preview'),
         menuBest: $('menu-best-score'),
         streakCount: $('streak-count'),
         challengeBanner: $('challenge-banner'),
@@ -52,6 +54,8 @@
     _wire: function () {
       var g = this.game;
       $('play-btn').onclick = function () { GameAudio.click(); g.startRun(); };
+      $('howto-btn').onclick = function () { GameAudio.click(); g.openGuide(false); };
+      $('guide-ok-btn').onclick = function () { g.closeGuide(); };
       $('pause-btn').onclick = function () { g.pause(); };
       $('resume-btn').onclick = function () { GameAudio.click(); g.resume(); };
       $('quit-btn').onclick = function () { GameAudio.click(); g.toMenu(); };
@@ -69,7 +73,7 @@
     },
 
     show: function (name) {
-      ['loading', 'menu', 'pause', 'gameover', 'skins', 'leaderboard'].forEach(function (k) {
+      ['loading', 'menu', 'pause', 'gameover', 'skins', 'leaderboard', 'guide'].forEach(function (k) {
         if (UI.el[k]) UI.el[k].classList.add('hidden');
       });
       if (this.el[name]) this.el[name].classList.remove('hidden');
@@ -98,6 +102,14 @@
     updateMenu: function (best, streak) {
       this.el.menuBest.textContent = best;
       this.el.streakCount.textContent = streak;
+    },
+
+    setMenuSkin: function (color) {
+      if (this.el.orbPreview) {
+        this.el.orbPreview.style.background =
+          'radial-gradient(circle at 38% 35%, #fff 0%, ' + color + ' 45%, ' + color + ' 100%)';
+        this.el.orbPreview.style.boxShadow = '0 0 40px ' + color + ', 0 0 80px ' + color;
+      }
     },
 
     showChallengeBanner: function (challenge) {

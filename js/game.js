@@ -1,20 +1,18 @@
-/* Core engine: responsive canvas, fixed-timestep loop, state machine,
-   and run orchestration (scoring, ads, juice, retention). */
+/* Core engine: FULL-SCREEN responsive canvas, fixed-timestep loop,
+   state machine, and run orchestration (scoring, ads, juice, retention). */
 (function (global) {
   'use strict';
 
-  var STATE = { LOADING: 'loading', MENU: 'menu', PLAY: 'play', PAUSED: 'paused', OVER: 'over', SKINS: 'skins' };
+  var STATE = { LOADING: 'loading', MENU: 'menu', PLAY: 'play', PAUSED: 'paused', OVER: 'over', SKINS: 'skins', GUIDE: 'guide' };
 
   function Game() {
     this.canvas = null;
     this.ctx = null;
     this.state = STATE.LOADING;
     this.dpr = 1;
-    this.viewW = CONFIG.BASE_W;
-    this.viewH = CONFIG.BASE_H;
-    this.scale = 1;
-    this.offsetX = 0;
-    this.offsetY = 0;
+
+    // live view (recomputed on resize) - everything renders against this
+    this.view = { w: 0, h: 0, scale: 1, lanes: 5, laneW: 0, playerY: 0, r: 18 };
 
     this.player = new Player();
     this.world = new World();
@@ -23,9 +21,8 @@
     this.muted = false;
     this.shake = 0;
     this.flash = 0;
-    this.speedLines = [];
+    this.bgScroll = 0;
 
-    // run stats
     this.distanceM = 0;
     this.runCoins = 0;
     this.runNearMiss = 0;
@@ -34,7 +31,6 @@
     this.tutorialShown = false;
     this.runStartTime = 0;
 
-    // fixed timestep
     this._acc = 0;
     this._last = 0;
     this._step = 1 / 60;
@@ -47,14 +43,13 @@
     GameInput.attach(this.canvas);
 
     Save.load();
-    Viral.init();                 // parse incoming friend challenge + seed leaderboard
+    Viral.init();
     this.muted = !!Utils.Storage.get('nds_muted', false);
     GameAudio.setMuted(this.muted);
 
     var self = this;
     GameInput.on('pause', function () { if (self.state === STATE.PLAY) self.pause(); });
     GameInput.on('action', function () {
-      // first tap dismisses tutorial + resumes audio (autoplay policy)
       GameAudio.resume();
       if (self.state === STATE.PLAY && self.tutorialShown) {
         self.tutorialShown = false; UI.showTutorial(false);
@@ -64,38 +59,44 @@
     UI.init(this);
     this._resize();
     global.addEventListener('resize', function () { self._resize(); });
-    global.addEventListener('orientationchange', function () { setTimeout(function () { self._resize(); }, 200); });
-
-    // pause when tab/app loses focus (protects state around backgrounding)
+    global.addEventListener('orientationchange', function () { setTimeout(function () { self._resize(); }, 250); });
     document.addEventListener('visibilitychange', function () {
       if (document.hidden && self.state === STATE.PLAY) self.pause();
     });
 
-    // quick simulated load for a smooth first paint
     var p = 0;
     var tick = setInterval(function () {
-      p += 0.25; UI.setLoaderProgress(Math.min(1, p));
-      if (p >= 1) { clearInterval(tick); self.toMenu(); }
-    }, 80);
+      p += 0.2; UI.setLoaderProgress(Math.min(1, p));
+      if (p >= 1) {
+        clearInterval(tick);
+        // first-time players see the guide before the menu
+        if (Save.data.runs === 0 && !Utils.Storage.get('nds_seen_guide', false)) self.openGuide(true);
+        else self.toMenu();
+      }
+    }, 70);
 
     this._last = performance.now();
     requestAnimationFrame(this._frame.bind(this));
   };
 
-  // ---- Responsive canvas: fit BASE_W x BASE_H, letterbox, crisp on HiDPI ----
+  // ---- FULL-SCREEN responsive: canvas fills viewport; compute lanes + scale ----
   Game.prototype._resize = function () {
     var w = global.innerWidth, h = global.innerHeight;
-    this.dpr = Math.min(global.devicePixelRatio || 1, 2); // cap DPR for perf
+    this.dpr = Math.min(global.devicePixelRatio || 1, 2);
     this.canvas.width = Math.floor(w * this.dpr);
     this.canvas.height = Math.floor(h * this.dpr);
     this.canvas.style.width = w + 'px';
     this.canvas.style.height = h + 'px';
 
-    // scale so the 480x800 design fits inside the screen (contain)
-    this.scale = Math.min(w / CONFIG.BASE_W, h / CONFIG.BASE_H);
-    this.viewW = w; this.viewH = h;
-    this.offsetX = (w - CONFIG.BASE_W * this.scale) / 2;
-    this.offsetY = (h - CONFIG.BASE_H * this.scale) / 2;
+    var v = this.view;
+    v.w = w; v.h = h;
+    v.scale = h / CONFIG.REF_H;                       // gameplay scales to height
+    // lane count adapts to width so phones & wide desktops both feel right
+    var lanes = Math.round(w / CONFIG.LANE_REF_WIDTH);
+    v.lanes = Utils.clamp(lanes, CONFIG.LANES_MIN, CONFIG.LANES_MAX);
+    v.laneW = w / v.lanes;
+    v.playerY = h * CONFIG.PLAYER_Y_RATIO;
+    v.r = CONFIG.PLAYER_RADIUS * v.scale;
   };
 
   // ---- State transitions ----
@@ -104,8 +105,20 @@
     UI.showHud(false);
     UI.updateMenu(Save.data.bestDistance, Save.data.streak);
     UI.setMuteIcon(this.muted);
-    UI.showChallengeBanner(Viral.challenge);   // show "X challenged you" if applicable
+    UI.setMenuSkin(Save.getSkinColor());
+    UI.showChallengeBanner(Viral.challenge);
     UI.show('menu');
+  };
+
+  Game.prototype.openGuide = function (firstTime) {
+    this.state = STATE.GUIDE;
+    this._guideFirstTime = !!firstTime;
+    UI.show('guide');
+  };
+  Game.prototype.closeGuide = function () {
+    Utils.Storage.set('nds_seen_guide', true);
+    GameAudio.click();
+    this.toMenu();
   };
 
   Game.prototype.openLeaderboard = function () {
@@ -118,18 +131,15 @@
   Game.prototype.shareScore = function () {
     GameAudio.click();
     var score = Math.max(Math.floor(this.distanceM), Save.data.bestDistance);
-    Utils.Ads; // (ads untouched here)
     Viral.shareScore(score, { challenge: false }).then(function (r) {
       if (r.method === 'clipboard') UI.info('\uD83D\uDCCB Copied! Paste it anywhere to share');
       else if (r.method === 'manual') UI.info('Share: ' + r.text);
       else UI.info('\uD83D\uDE80 Thanks for sharing!');
     });
   };
-
   Game.prototype.shareChallenge = function () {
     GameAudio.click();
     var score = Math.max(Math.floor(this.distanceM), Save.data.bestDistance);
-    var self = this;
     Viral.shareScore(score, { challenge: true, name: 'I' }).then(function (r) {
       if (r.method === 'clipboard') UI.info('\u2694\uFE0F Challenge link copied! Send it to a friend');
       else if (r.method === 'manual') UI.info('Challenge: ' + r.text);
@@ -144,26 +154,20 @@
     this.particles.clear();
     this.distanceM = 0; this.runCoins = 0; this.runNearMiss = 0;
     this.combo = 0; this.reviveUsed = false; this.shake = 0; this.flash = 0;
-    this.speedLines = [];
     this.runStartTime = performance.now();
 
     this.state = STATE.PLAY;
-    UI.show('');            // hide all overlays
+    UI.show('');
     UI.showHud(true);
     UI.setDistance(0); UI.setCoins(0);
 
-    // chase target: friend challenge takes priority, else personal best
-    if (Viral.challenge) {
-      UI.setChaseTag('\u2694\uFE0F Beat ' + Viral.challenge.name + ': ' + Viral.challenge.score + 'm');
-    } else if (Save.data.bestDistance > 0) {
-      UI.setChaseTag('\uD83C\uDFAF Best: ' + Save.data.bestDistance + 'm');
-    } else {
-      UI.setChaseTag(null);
-    }
+    if (Viral.challenge) UI.setChaseTag('\u2694\uFE0F Beat ' + Viral.challenge.name + ': ' + Viral.challenge.score + 'm');
+    else if (Save.data.bestDistance > 0) UI.setChaseTag('\uD83C\uDFAF Best: ' + Save.data.bestDistance + 'm');
+    else UI.setChaseTag(null);
 
-    // show tutorial only for first-ever runs
-    this.tutorialShown = Save.data.runs < 2;
+    this.tutorialShown = Save.data.runs < 3;
     UI.showTutorial(this.tutorialShown);
+    this._last = performance.now();
   };
 
   Game.prototype.pause = function () {
@@ -177,7 +181,7 @@
     this.state = STATE.PLAY;
     GameAudio.setMuted(this.muted);
     UI.show('');
-    this._last = performance.now(); // avoid dt spike
+    this._last = performance.now();
   };
 
   Game.prototype.toggleMute = function () {
@@ -196,9 +200,12 @@
     var owned = Save.data.unlockedSkins.indexOf(id) >= 0;
     if (owned) { Save.selectSkin(id); GameAudio.click(); }
     else {
-      if (Save.buySkin(id)) { Save.selectSkin(id); GameAudio.coin(); }
-      else { GameAudio.crash(); } // not enough coins feedback
+      if (Save.buySkin(id)) { Save.selectSkin(id); GameAudio.coin(); UI.info('\uD83C\uDFA8 Skin unlocked!'); }
+      else { GameAudio.crash(); UI.info('Not enough coins \u2014 keep playing!'); }
     }
+    // live-apply to player + previews
+    this.player.skinColor = Save.getSkinColor();
+    UI.setMenuSkin(Save.getSkinColor());
     UI.renderSkins(Save);
   };
 
@@ -206,9 +213,8 @@
   Game.prototype._gameOver = function () {
     this.state = STATE.OVER;
     GameAudio.crash();
-    this.shake = 18; this.flash = 1;
+    this.shake = 20; this.flash = 1;
 
-    // persist stats
     var dist = Math.floor(this.distanceM);
     var newBest = dist > Save.data.bestDistance;
     if (newBest) Save.data.bestDistance = dist;
@@ -219,39 +225,25 @@
     Save.save();
 
     var newly = Save.checkAchievements();
-
-    // viral: submit to local leaderboard, compute rank + social proof
     var rank = Viral.submitScore(Save.data.bestDistance, 'You');
     var beatPct = Viral.beatPercent(dist);
 
     var self = this;
-    // First interstitial only after a couple of runs and not too early in session.
     var elapsed = (performance.now() - this.runStartTime) / 1000;
     var showInter = Save.data.runs > 2 && Save.data.runs % 3 === 0 && elapsed > 20;
 
     function finish() {
       UI.setReviveAvailable(CONFIG.REVIVE_ENABLED && !self.reviveUsed && dist > 150);
       UI.showGameOver({
-        score: dist,
-        best: Save.data.bestDistance,
-        newBest: newBest,
-        coinsGot: self.runCoins,
-        rank: rank,
-        beatPct: beatPct,
-        challenge: Viral.challenge
+        score: dist, best: Save.data.bestDistance, newBest: newBest,
+        coinsGot: self.runCoins, rank: rank, beatPct: beatPct, challenge: Viral.challenge
       });
-      // surface achievement toasts after the panel
       newly.forEach(function (a, i) {
         setTimeout(function () { GameAudio.achieve(); UI.toast(a.desc + '  +' + a.reward); }, 500 + i * 700);
       });
     }
-
-    if (showInter) {
-      // pause-safe: state already OVER, loop won't advance gameplay
-      Utils.Ads.showInterstitial('gameover').then(finish);
-    } else {
-      finish();
-    }
+    if (showInter) Utils.Ads.showInterstitial('gameover').then(finish);
+    else finish();
   };
 
   Game.prototype.requestRevive = function () {
@@ -262,10 +254,9 @@
       if (!r.success) return;
       self.reviveUsed = true;
       GameAudio.revive();
-      // clear nearby obstacles so player isn't instantly re-killed
-      self.world.obstacles = self.world.obstacles.filter(function (o) {
-        return Math.abs(o.y - CONFIG.BASE_H * CONFIG.PLAYER_Y_RATIO) > 200;
-      });
+      // clear obstacles near the player so they aren't instantly re-killed
+      var py = self.view.playerY;
+      self.world.obstacles = self.world.obstacles.filter(function (o) { return Math.abs(o.y - py) > 220 * self.view.scale; });
       self.player.vx = 0;
       self.state = STATE.PLAY;
       UI.show(''); UI.showHud(true);
@@ -277,144 +268,127 @@
   Game.prototype._frame = function (now) {
     var dt = (now - this._last) / 1000;
     this._last = now;
-    if (dt > 0.1) dt = 0.1; // clamp after tab switch
+    if (dt > 0.1) dt = 0.1;
 
     if (this.state === STATE.PLAY) {
       this._acc += dt;
-      while (this._acc >= this._step) {
-        this._update(this._step);
-        this._acc -= this._step;
-      }
+      var guard = 0;
+      while (this._acc >= this._step && guard < 5) { this._update(this._step); this._acc -= this._step; guard++; }
     }
     this._render();
     requestAnimationFrame(this._frame.bind(this));
   };
 
   Game.prototype._update = function (dt) {
-    var step60 = dt * 60; // normalize to "frames" for tuned constants
+    var step60 = dt * 60;
+    var v = this.view;
 
     var axis = GameInput.update(this.player.x01);
     this.player.update(step60, axis);
-    this.world.update(step60);
+    this.world.update(step60, v);
+    this.bgScroll += this.world.speed * dt * v.scale;
 
-    var playerY = CONFIG.BASE_H * CONFIG.PLAYER_Y_RATIO;
-    var r = CONFIG.PLAYER_RADIUS;
-    var res = this.world.checkCollisions(this.player.x01, playerY, r, CONFIG.BASE_W, 0);
+    var res = this.world.checkCollisions(this.player.x01, v);
 
-    // scoring
     this.distanceM = this.world.distancePx * CONFIG.METERS_PER_PX;
     UI.setDistance(Math.floor(this.distanceM));
 
+    var px = this.player.x01 * v.w;
     if (res.coinsGot) {
       this.runCoins += res.coinsGot;
       UI.setCoins(this.runCoins);
       GameAudio.coin();
-      var px = 0 + this.player.x01 * CONFIG.BASE_W;
-      this.particles.emit(px, playerY, 6, { color: '#ffe600', minSpeed: 1, maxSpeed: 4, minLife: 0.2, maxLife: 0.5 });
+      this.particles.emit(px, v.playerY, 8, { color: '#ffe600', minSpeed: 1, maxSpeed: 5, minLife: 0.2, maxLife: 0.5, minSize: 2, maxSize: 4 * v.scale });
     }
-
     if (res.nearMiss) {
-      this.runNearMiss++;
-      this.combo++;
+      this.runNearMiss++; this.combo++;
       GameAudio.near();
-      if (this.combo > 0 && this.combo % 5 === 0) {
+      if (this.combo % 5 === 0) {
         GameAudio.combo();
         UI.popCombo('COMBO x' + this.combo + '!');
         this.shake = Math.min(this.shake + 6, 14);
       }
     }
-
-    // trail
-    var trailX = this.player.x01 * CONFIG.BASE_W;
-    this.particles.emit(trailX, playerY + r, 1, {
+    // comet trail
+    this.particles.emit(px, v.playerY + v.r, 1, {
       color: this.player.skinColor, angle: Math.PI / 2,
-      minSpeed: 0.5, maxSpeed: 1.5, minLife: 0.2, maxLife: 0.4, minSize: 2, maxSize: 4
+      minSpeed: 0.5, maxSpeed: 1.5, minLife: 0.2, maxLife: 0.45, minSize: 2, maxSize: 4 * v.scale
     });
 
     this.particles.update(dt);
-
-    // decay juice
     if (this.shake > 0) this.shake = Math.max(0, this.shake - step60 * 1.2);
     if (this.flash > 0) this.flash = Math.max(0, this.flash - step60 * 0.08);
 
     if (res.crash) {
-      var pxc = this.player.x01 * CONFIG.BASE_W;
-      this.particles.emit(pxc, playerY, 30, {
-        color: this.player.skinColor, minSpeed: 2, maxSpeed: 9, minLife: 0.4, maxLife: 1.0, minSize: 2, maxSize: 6, gravity: 0.2
+      this.particles.emit(px, v.playerY, 36, {
+        color: this.player.skinColor, minSpeed: 2, maxSpeed: 11, minLife: 0.4, maxLife: 1.0, minSize: 2, maxSize: 7 * v.scale, gravity: 0.25
       });
       this._gameOver();
     }
   };
 
-  // ---- Rendering ----
+  // ---- Rendering (full screen) ----
   Game.prototype._render = function () {
-    var ctx = this.ctx;
+    var ctx = this.ctx, v = this.view;
     ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
-    // clear full screen (letterbox bg)
-    ctx.fillStyle = '#06060f';
-    ctx.fillRect(0, 0, this.viewW, this.viewH);
 
-    ctx.save();
-    // map design space -> screen with letterbox + screen shake
-    var sx = (Math.random() - 0.5) * this.shake;
-    var sy = (Math.random() - 0.5) * this.shake;
-    ctx.translate(this.offsetX + sx, this.offsetY + sy);
-    ctx.scale(this.scale, this.scale);
-
-    // clip to play area
-    ctx.beginPath();
-    ctx.rect(0, 0, CONFIG.BASE_W, CONFIG.BASE_H);
-    ctx.clip();
-
-    // play-area background
-    var grad = ctx.createLinearGradient(0, 0, 0, CONFIG.BASE_H);
+    // background gradient (fills entire viewport)
+    var grad = ctx.createLinearGradient(0, 0, 0, v.h);
     grad.addColorStop(0, '#0d0d2a');
     grad.addColorStop(1, '#070716');
     ctx.fillStyle = grad;
-    ctx.fillRect(0, 0, CONFIG.BASE_W, CONFIG.BASE_H);
+    ctx.fillRect(0, 0, v.w, v.h);
 
-    // speed lines scale with world speed (juice)
-    this._drawSpeedLines(ctx);
+    // moving perspective floor lines (depth)
+    this._drawFloor(ctx, v);
 
-    if (this.state === STATE.PLAY || this.state === STATE.PAUSED || this.state === STATE.OVER) {
-      this.world.draw(ctx, CONFIG.BASE_W, 0);
+    var playing = (this.state === STATE.PLAY || this.state === STATE.PAUSED || this.state === STATE.OVER);
+
+    ctx.save();
+    var sx = (Math.random() - 0.5) * this.shake;
+    var sy = (Math.random() - 0.5) * this.shake;
+    ctx.translate(sx, sy);
+
+    if (playing) {
+      this.world.draw(ctx, v);
       this.particles.draw(ctx);
-      var playerY = CONFIG.BASE_H * CONFIG.PLAYER_Y_RATIO;
-      if (this.state !== STATE.OVER) {
-        this.player.draw(ctx, CONFIG.BASE_W, 0, playerY, CONFIG.PLAYER_RADIUS);
-      }
+      if (this.state !== STATE.OVER) this.player.draw(ctx, v);
     } else {
-      // idle menu backdrop: gentle drifting particles
-      if (Math.random() < 0.3) {
-        this.particles.emit(Utils.rand(0, CONFIG.BASE_W), CONFIG.BASE_H + 10, 1, {
-          color: '#1b2a6b', angle: -Math.PI / 2, minSpeed: 1, maxSpeed: 2.5, minLife: 1.2, maxLife: 2, minSize: 2, maxSize: 4
+      // ambient drifting particles behind menus
+      if (Math.random() < 0.25) {
+        this.particles.emit(Utils.rand(0, v.w), v.h + 10, 1, {
+          color: '#22357a', angle: -Math.PI / 2, minSpeed: 1, maxSpeed: 2.5, minLife: 1.4, maxLife: 2.4, minSize: 2, maxSize: 4
         });
       }
       this.particles.update(this._step);
       this.particles.draw(ctx);
     }
+    ctx.restore();
 
-    // crash flash
     if (this.flash > 0) {
       ctx.fillStyle = 'rgba(255,255,255,' + (this.flash * 0.5) + ')';
-      ctx.fillRect(0, 0, CONFIG.BASE_W, CONFIG.BASE_H);
+      ctx.fillRect(0, 0, v.w, v.h);
     }
-
-    ctx.restore();
   };
 
-  Game.prototype._drawSpeedLines = function (ctx) {
-    var spd = this.world.speed || CONFIG.START_SPEED;
-    var intensity = (spd - CONFIG.START_SPEED) / (CONFIG.MAX_SPEED - CONFIG.START_SPEED);
-    if (this.state !== STATE.PLAY || intensity < 0.05) return;
-    ctx.strokeStyle = 'rgba(0,240,255,' + (0.05 + intensity * 0.15) + ')';
-    ctx.lineWidth = 2;
-    var n = Math.floor(4 + intensity * 8);
-    for (var i = 0; i < n; i++) {
-      var x = (Math.sin((Date.now() * 0.005) + i * 13.3) * 0.5 + 0.5) * CONFIG.BASE_W;
-      var len = 30 + intensity * 60;
-      var y = ((Date.now() * (0.3 + intensity) + i * 120) % (CONFIG.BASE_H + 100));
-      ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x, y + len); ctx.stroke();
+  Game.prototype._drawFloor = function (ctx, v) {
+    var spacing = 60 * v.scale;
+    var off = this.bgScroll % spacing;
+    ctx.strokeStyle = 'rgba(0,240,255,0.06)';
+    ctx.lineWidth = 1;
+    for (var y = off; y < v.h; y += spacing) {
+      ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(v.w, y); ctx.stroke();
+    }
+    // speed glow at bottom when fast
+    if (this.state === STATE.PLAY) {
+      var t = Utils.clamp((this.world.speed - CONFIG.START_SPEED) / (CONFIG.MAX_SPEED - CONFIG.START_SPEED), 0, 1);
+      if (t > 0.05) {
+        var gg = ctx.createLinearGradient(0, v.h, 0, v.h - 160 * v.scale);
+        gg.addColorStop(0, 'rgba(0,240,255,' + (0.10 * t) + ')');
+        gg.addColorStop(1, 'rgba(0,240,255,0)');
+        ctx.fillStyle = gg;
+        ctx.fillRect(0, v.h - 160 * v.scale, v.w, 160 * v.scale);
+      }
     }
   };
 

@@ -249,3 +249,46 @@ html, body {
   box-shadow: 0 0 24px rgba(0,240,255,0.35); animation: toastIn .35s ease-out;
   max-width: 90%; text-align: center;
 }
+
+
+/* ---- Premium menu card ---- */
+.menu-card {
+  display: flex; flex-direction: column; align-items: center; gap: 14px;
+  background: linear-gradient(160deg, rgba(20,20,48,0.78), rgba(10,10,26,0.78));
+  border: 1px solid rgba(0,240,255,0.18);
+  border-radius: 28px; padding: 30px 26px; max-width: 420px; width: 100%;
+  box-shadow: 0 24px 70px rgba(0,0,0,0.55), inset 0 1px 0 rgba(255,255,255,0.07);
+  backdrop-filter: blur(10px);
+}
+.orb-preview {
+  width: 78px; height: 78px; border-radius: 50%;
+  background: radial-gradient(circle at 38% 35%, #fff 0%, #00f0ff 45%, #00f0ff 100%);
+  box-shadow: 0 0 40px #00f0ff, 0 0 80px #00f0ff;
+  animation: orbFloat 2.6s ease-in-out infinite;
+}
+@keyframes orbFloat { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-10px)} }
+.tagline { font-size: clamp(13px,3.6vw,16px); letter-spacing: 2px; opacity: .7; text-transform: uppercase; margin-top: -4px; }
+.btn-big { padding: 18px 56px; font-size: clamp(18px,5vw,26px); border-radius: 18px; }
+
+/* ---- How to play guide ---- */
+.guide-list { display: flex; flex-direction: column; gap: 12px; width: 100%; }
+.guide-item { display: flex; align-items: center; gap: 14px; text-align: left;
+  background: rgba(255,255,255,0.05); border-radius: 12px; padding: 12px 14px; }
+.guide-ic { font-size: 26px; min-width: 32px; text-align: center; }
+.guide-tx { font-size: 14px; line-height: 1.35; }
+.guide-tx b { color: var(--neon); }
+
+/* desktop: a touch more breathing room + larger orb */
+@media (min-width: 900px) {
+  .menu-card { padding: 40px 46px; max-width: 480px; }
+  .orb-preview { width: 96px; height: 96px; }
+  .panel { max-width: 440px; }
+}
+/* landscape phones: compact menu so it never overflows */
+@media (max-height: 520px) {
+  .menu-card { padding: 16px 22px; gap: 9px; border-radius: 18px; }
+  .orb-preview { width: 48px; height: 48px; }
+  .tagline { display: none; }
+  .btn-big { padding: 12px 40px; }
+  .streak-pill { display: none; }
+}

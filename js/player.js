@@ -1,57 +1,61 @@
-/* Player: a neon orb that steers left/right. Smooth, lag-free movement.
-   Position stored as x01 (0..1 across play area) for resolution independence. */
+/* Player: a glowing neon orb with a comet trail. Steers left/right.
+   Position is x01 in [0..1] across the full screen width (resolution independent). */
 (function (global) {
   'use strict';
 
-  function Player() {
-    this.reset();
-  }
+  function Player() { this.reset(); }
 
   Player.prototype.reset = function () {
-    this.x01 = 0.5;       // center
-    this.vx = 0;          // horizontal velocity (in 0..1 space)
+    this.x01 = 0.5;
+    this.vx = 0;
     this.skinColor = '#00f0ff';
-    this.trailTimer = 0;
-    this.tilt = 0;        // visual lean
+    this.tilt = 0;
   };
 
   Player.prototype.update = function (dt, axis) {
-    // Accelerate toward steering axis, with friction for a drifty feel.
-    var accel = axis * CONFIG.MOVE_SPEED * dt;
-    this.vx += accel;
-    this.vx *= 0.82;                 // drift friction
+    this.vx += axis * CONFIG.MOVE_SPEED * dt * 0.02;
+    this.vx *= 0.80;                 // drift friction
     this.x01 += this.vx;
 
-    // Walls (with a little bounce so hugging edges feels alive).
-    if (this.x01 < 0.06) { this.x01 = 0.06; this.vx *= -0.3; }
-    if (this.x01 > 0.94) { this.x01 = 0.94; this.vx *= -0.3; }
+    var margin = 0.04;
+    if (this.x01 < margin) { this.x01 = margin; this.vx *= -0.25; }
+    if (this.x01 > 1 - margin) { this.x01 = 1 - margin; this.vx *= -0.25; }
 
-    // Visual tilt based on velocity.
-    this.tilt = Utils.clamp(this.vx * 12, -0.5, 0.5);
+    this.tilt = Utils.clamp(this.vx * 18, -0.5, 0.5);
   };
 
-  Player.prototype.draw = function (ctx, playW, playX, y, r) {
-    var px = playX + this.x01 * playW;
+  // Draw in screen pixels. view supplies playerY and r.
+  Player.prototype.draw = function (ctx, view) {
+    var px = this.x01 * view.w;
+    var py = view.playerY;
+    var r = view.r;
+
     ctx.save();
-    ctx.translate(px, y);
+    ctx.translate(px, py);
     ctx.rotate(this.tilt);
-    // glow
+
+    // outer glow
     ctx.shadowColor = this.skinColor;
-    ctx.shadowBlur = 22;
-    ctx.fillStyle = this.skinColor;
+    ctx.shadowBlur = 28;
+    var grad = ctx.createRadialGradient(0, 0, r * 0.2, 0, 0, r);
+    grad.addColorStop(0, '#ffffff');
+    grad.addColorStop(0.35, this.skinColor);
+    grad.addColorStop(1, this.skinColor);
+    ctx.fillStyle = grad;
     ctx.beginPath();
     ctx.arc(0, 0, r, 0, Math.PI * 2);
     ctx.fill();
-    // inner highlight
+
+    // crisp ring
     ctx.shadowBlur = 0;
-    ctx.globalAlpha = 0.85;
-    ctx.fillStyle = '#ffffff';
+    ctx.strokeStyle = 'rgba(255,255,255,0.85)';
+    ctx.lineWidth = Math.max(1.5, r * 0.12);
     ctx.beginPath();
-    ctx.arc(-r * 0.3, -r * 0.3, r * 0.35, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.globalAlpha = 1;
+    ctx.arc(0, 0, r * 0.78, 0, Math.PI * 2);
+    ctx.stroke();
+
     ctx.restore();
-    return px; // screen x for trail/particles
+    return px;
   };
 
   global.Player = Player;

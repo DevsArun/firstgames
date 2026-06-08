@@ -1,4 +1,7 @@
-/* Global config + tunables. Single source of truth. */
+/* Global config + tunables. Single source of truth.
+   The game renders FULL-SCREEN (fills the viewport), not a fixed letterboxed box.
+   All gameplay sizes are expressed relative to a reference height so the feel
+   stays consistent across phones, tablets and desktop. */
 (function (global) {
   'use strict';
 
@@ -6,29 +9,31 @@
     // Set false before submitting to platforms (strips console logs).
     DEBUG: false,
 
-    // Logical design resolution (canvas auto-scales to fit screen).
-    BASE_W: 480,
-    BASE_H: 800,
+    // Reference height used to scale gameplay constants to any screen.
+    REF_H: 800,
 
-    // Player
-    PLAYER_RADIUS: 16,
-    PLAYER_Y_RATIO: 0.78,      // player sits at 78% down the screen
-    MOVE_SPEED: 0.9,           // horizontal accel responsiveness
+    // Player (values are in reference-pixels, scaled at runtime)
+    PLAYER_RADIUS: 18,
+    PLAYER_Y_RATIO: 0.80,      // player sits at 80% down the screen
+    MOVE_SPEED: 0.95,          // horizontal steering responsiveness
 
-    // World / difficulty
-    START_SPEED: 5.0,          // px per frame (at 60fps baseline)
-    MAX_SPEED: 14.0,
-    SPEED_RAMP: 0.0018,        // speed gained per frame
-    OBSTACLE_MIN_GAP: 220,     // vertical gap between obstacle rows (px)
-    OBSTACLE_MAX_GAP: 340,
-    LANES: 5,
+    // World / difficulty (reference-pixels / reference-frame)
+    START_SPEED: 5.5,
+    MAX_SPEED: 15.0,
+    SPEED_RAMP: 0.0019,        // speed gained per frame
+    OBSTACLE_MIN_GAP: 230,     // vertical gap between obstacle rows
+    OBSTACLE_MAX_GAP: 360,
+    OBSTACLE_THICK: 30,        // bar thickness
+    // lanes adapt to aspect: phones get fewer, wide desktop gets more
+    LANES_MIN: 5,
+    LANES_MAX: 9,
+    LANE_REF_WIDTH: 95,        // target px per lane -> drives lane count by width
 
     // Scoring
     METERS_PER_PX: 0.1,
-    COINS_PER_METER: 0.02,
 
     // Juice
-    MAX_PARTICLES: 140,        // capped for low-end devices
+    MAX_PARTICLES: 160,        // capped for low-end devices
 
     // Retention
     REVIVE_ENABLED: true
