@@ -47,6 +47,7 @@
     GameInput.attach(this.canvas);
 
     Save.load();
+    Viral.init();                 // parse incoming friend challenge + seed leaderboard
     this.muted = !!Utils.Storage.get('nds_muted', false);
     GameAudio.setMuted(this.muted);
 
@@ -103,7 +104,37 @@
     UI.showHud(false);
     UI.updateMenu(Save.data.bestDistance, Save.data.streak);
     UI.setMuteIcon(this.muted);
+    UI.showChallengeBanner(Viral.challenge);   // show "X challenged you" if applicable
     UI.show('menu');
+  };
+
+  Game.prototype.openLeaderboard = function () {
+    this.state = STATE.MENU;
+    UI.renderLeaderboard(Viral.getLeaderboard());
+    UI.show('leaderboard');
+  };
+
+  // ---- Viral share actions ----
+  Game.prototype.shareScore = function () {
+    GameAudio.click();
+    var score = Math.max(Math.floor(this.distanceM), Save.data.bestDistance);
+    Utils.Ads; // (ads untouched here)
+    Viral.shareScore(score, { challenge: false }).then(function (r) {
+      if (r.method === 'clipboard') UI.info('\uD83D\uDCCB Copied! Paste it anywhere to share');
+      else if (r.method === 'manual') UI.info('Share: ' + r.text);
+      else UI.info('\uD83D\uDE80 Thanks for sharing!');
+    });
+  };
+
+  Game.prototype.shareChallenge = function () {
+    GameAudio.click();
+    var score = Math.max(Math.floor(this.distanceM), Save.data.bestDistance);
+    var self = this;
+    Viral.shareScore(score, { challenge: true, name: 'I' }).then(function (r) {
+      if (r.method === 'clipboard') UI.info('\u2694\uFE0F Challenge link copied! Send it to a friend');
+      else if (r.method === 'manual') UI.info('Challenge: ' + r.text);
+      else UI.info('\u2694\uFE0F Challenge sent!');
+    });
   };
 
   Game.prototype.startRun = function () {
@@ -120,6 +151,15 @@
     UI.show('');            // hide all overlays
     UI.showHud(true);
     UI.setDistance(0); UI.setCoins(0);
+
+    // chase target: friend challenge takes priority, else personal best
+    if (Viral.challenge) {
+      UI.setChaseTag('\u2694\uFE0F Beat ' + Viral.challenge.name + ': ' + Viral.challenge.score + 'm');
+    } else if (Save.data.bestDistance > 0) {
+      UI.setChaseTag('\uD83C\uDFAF Best: ' + Save.data.bestDistance + 'm');
+    } else {
+      UI.setChaseTag(null);
+    }
 
     // show tutorial only for first-ever runs
     this.tutorialShown = Save.data.runs < 2;
@@ -180,6 +220,10 @@
 
     var newly = Save.checkAchievements();
 
+    // viral: submit to local leaderboard, compute rank + social proof
+    var rank = Viral.submitScore(Save.data.bestDistance, 'You');
+    var beatPct = Viral.beatPercent(dist);
+
     var self = this;
     // First interstitial only after a couple of runs and not too early in session.
     var elapsed = (performance.now() - this.runStartTime) / 1000;
@@ -187,7 +231,15 @@
 
     function finish() {
       UI.setReviveAvailable(CONFIG.REVIVE_ENABLED && !self.reviveUsed && dist > 150);
-      UI.showGameOver(dist, Save.data.bestDistance, newBest, self.runCoins);
+      UI.showGameOver({
+        score: dist,
+        best: Save.data.bestDistance,
+        newBest: newBest,
+        coinsGot: self.runCoins,
+        rank: rank,
+        beatPct: beatPct,
+        challenge: Viral.challenge
+      });
       // surface achievement toasts after the panel
       newly.forEach(function (a, i) {
         setTimeout(function () { GameAudio.achieve(); UI.toast(a.desc + '  +' + a.reward); }, 500 + i * 700);
