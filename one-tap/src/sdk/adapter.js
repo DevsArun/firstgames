@@ -46,8 +46,8 @@ export class PlatformAdapter {
 
 /**
  * Environment detection + factory.
- * Detects TikTok Mini Games host; otherwise falls back to web.
- * Override with ?adapter=web|tiktok for testing.
+ * Auto-detects the host (TikTok Mini Games / CrazyGames); else web fallback.
+ * Override with ?adapter=web|tiktok|crazygames for testing.
  */
 export async function createAdapter() {
   const forced = new URLSearchParams(location.search).get('adapter');
@@ -55,11 +55,16 @@ export async function createAdapter() {
   const hasTikTok =
     typeof window !== 'undefined' &&
     (window.TikTokMiniGame || window.tt || window.TikTokSDK);
+  const hasCrazy =
+    typeof window !== 'undefined' && window.CrazyGames && window.CrazyGames.SDK;
 
   let adapter;
   if (forced === 'tiktok' || (!forced && hasTikTok)) {
     const { TikTokAdapter } = await import('./tiktok.js');
     adapter = new TikTokAdapter();
+  } else if (forced === 'crazygames' || (!forced && hasCrazy)) {
+    const { CrazyGamesAdapter } = await import('./crazygames.js');
+    adapter = new CrazyGamesAdapter();
   } else {
     const { WebAdapter } = await import('./web.js');
     adapter = new WebAdapter();

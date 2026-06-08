@@ -19,7 +19,7 @@ export class UI {
       btnRevive: $('btnRevive'), btnDouble: $('btnDouble'), btnRetry: $('btnRetry'),
       btnShare: $('btnShare'), btnShop: $('btnShop'),
       shop: $('shop'), skinGrid: $('skinGrid'), btnRemoveAds: $('btnRemoveAds'), btnCloseShop: $('btnCloseShop'),
-      fade: $('fade'), toast: $('toast'),
+      fade: $('fade'), toast: $('toast'), levelup: $('levelup'),
     };
   }
 
@@ -46,6 +46,14 @@ export class UI {
     e.style.animation = 'none'; void e.offsetWidth; e.style.animation = '';
   }
   hideSoClose() { this.el.soclose.classList.add('hidden'); }
+
+  /** explicit "LEVEL X" banner on level-up — fuels shareable level clips */
+  flashLevel(lvl) {
+    const e = this.el.levelup;
+    e.textContent = 'LEVEL ' + lvl;
+    e.classList.remove('hidden');
+    e.style.animation = 'none'; void e.offsetWidth; e.style.animation = '';
+  }
 
   showCard({ near, score, level, percentile, doubled }) {
     this.hideSoClose();

@@ -89,6 +89,7 @@ class App {
   _onLevelUp(lvl) {
     Audio.level();
     this.ui.setHUD(this.game.score, lvl);
+    this.ui.flashLevel(lvl);
     // interstitial ONLY hidden in the level-fade (rule 12), gated + paced
     const now = performance.now();
     const eligible =
