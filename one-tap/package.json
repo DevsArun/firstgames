@@ -1,0 +1,11 @@
+{
+  "name": "one-tap",
+  "version": "1.0.0",
+  "description": "ONE TAP — SDK-agnostic vanilla JS + Canvas portrait hypercasual for TikTok Mini Games + web fallback.",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "start": "python3 -m http.server 8080",
+    "serve": "npx --yes serve -l 8080 ."
+  }
+}

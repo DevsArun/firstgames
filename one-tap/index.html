@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <meta name="theme-color" content="#05060a" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <title>ONE TAP</title>
+  <link rel="stylesheet" href="./styles.css" />
+</head>
+<body>
+  <!-- Canvas inits immediately, black bg painted by CSS = zero loading flash -->
+  <canvas id="game"></canvas>
+
+  <!-- All overlays are DOM (cheap, crisp text) layered over the canvas -->
+  <div id="ui">
+    <!-- Score HUD (top-center) -->
+    <div id="hud" class="hidden">
+      <div id="score">0</div>
+      <div id="level">LEVEL 1</div>
+    </div>
+
+    <!-- READY overlay -->
+    <div id="ready" class="overlay">
+      <div class="logo">ONE<span class="accent">TAP</span></div>
+      <div class="tagline">one tap per gap.</div>
+      <div class="pulse">TAP TO START</div>
+      <div class="best" id="readyBest"></div>
+    </div>
+
+    <!-- DEAD freeze label (near-miss) -->
+    <div id="soclose" class="hidden">SO&nbsp;CLOSE</div>
+
+    <!-- CARD / flex screen -->
+    <div id="card" class="overlay hidden">
+      <div class="flexcard" id="flexcard">
+        <div class="fc-head">ONE<span class="accent">TAP</span></div>
+        <div class="fc-result" id="fcResult">SO CLOSE</div>
+        <div class="fc-level" id="fcLevel">LEVEL 7</div>
+        <div class="fc-score"><span id="fcScore">0</span><small>SCORE</small></div>
+        <div class="fc-percentile" id="fcPercentile">you beat 88% of players</div>
+        <div class="fc-tag">#onemoretry</div>
+      </div>
+
+      <div class="actions">
+        <button class="btn btn-rewarded" id="btnRevive" data-ad>‏▶ REVIVE <small>watch ad</small></button>
+        <button class="btn btn-rewarded" id="btnDouble" data-ad>×2 DOUBLE SCORE <small>watch ad</small></button>
+        <button class="btn btn-primary" id="btnRetry">RETRY</button>
+        <div class="row">
+          <button class="btn btn-ghost" id="btnShare">⤴ RECORD / SHARE</button>
+          <button class="btn btn-ghost" id="btnShop">SKINS</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- SHOP -->
+    <div id="shop" class="overlay hidden">
+      <div class="sheet">
+        <div class="sheet-title">SKINS</div>
+        <div id="skinGrid" class="skin-grid"></div>
+        <div class="iap">
+          <button class="btn btn-iap" id="btnRemoveAds">REMOVE ADS <small>$2.99</small></button>
+        </div>
+        <button class="btn btn-ghost" id="btnCloseShop">BACK</button>
+      </div>
+    </div>
+
+    <!-- Level-fade transition layer (interstitials hide here) -->
+    <div id="fade"></div>
+  </div>
+
+  <!-- Toast -->
+  <div id="toast" class="hidden"></div>
+
+  <script type="module" src="./src/main.js"></script>
+</body>
+</html>
