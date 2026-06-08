@@ -1,0 +1,1262 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+<meta name="theme-color" content="#05060a" />
+<meta name="description" content="NEON DRIFT — an endless reflex driving rush. Dodge the grid, chase the wave, beat your state." />
+<title>NEON DRIFT — Reflex Rush</title>
+
+<!--
+  CrazyGames SDK (v3). Loaded async; the game runs fully even if it fails (local dev / offline).
+  Docs: https://docs.crazygames.com/sdk/html5/intro/
+-->
+<script async src="https://sdk.crazygames.com/crazygames-sdk-v3.js"></script>
+
+<style>
+  /* ============================================================
+     DESIGN TOKENS — "Slope meets Duolingo" clean neon system.
+     Zero image assets. All visuals are procedural CSS / Canvas.
+     ============================================================ */
+  :root{
+    --bg-0:#05060a;
+    --bg-1:#0a0d18;
+    --ink:#eaf2ff;
+    --ink-dim:#8b97b8;
+    --neon:#19f0c8;      /* primary cyan-mint */
+    --neon-2:#7a5cff;    /* violet */
+    --neon-3:#ff3d81;    /* hot pink (danger / crash) */
+    --gold:#ffd166;
+    --glass:rgba(255,255,255,0.06);
+    --glass-line:rgba(255,255,255,0.12);
+    --shadow:0 20px 60px rgba(0,0,0,0.55);
+    --r-lg:22px;
+    --r-md:14px;
+    --ease:cubic-bezier(.16,1,.3,1);
+    --font:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;
+  }
+
+  *{ margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  html,body{ height:100%; overflow:hidden; background:var(--bg-0); }
+  body{
+    font-family:var(--font);
+    color:var(--ink);
+    position:fixed; inset:0;
+    user-select:none; -webkit-user-select:none;
+    touch-action:none;
+  }
+
+  /* ---- Canvas stage ---- */
+  #stage{ position:absolute; inset:0; display:block; z-index:1; }
+
+  /* ---- Vignette + scanline polish over canvas ---- */
+  #grain{
+    position:absolute; inset:0; z-index:2; pointer-events:none;
+    background:
+      radial-gradient(120% 90% at 50% 8%, transparent 55%, rgba(0,0,0,.55) 100%);
+    mix-blend-mode:multiply;
+  }
+
+  /* ---- HUD (in-game) ---- */
+  #hud{
+    position:absolute; inset:0; z-index:5; pointer-events:none;
+    padding:max(16px, env(safe-area-inset-top)) 18px 18px;
+    display:flex; flex-direction:column; justify-content:flex-start;
+    opacity:0; transition:opacity .35s var(--ease);
+  }
+  #hud.show{ opacity:1; }
+  .hud-row{ display:flex; align-items:flex-start; justify-content:space-between; gap:12px; }
+
+  .stat{
+    background:var(--glass);
+    border:1px solid var(--glass-line);
+    backdrop-filter:blur(14px); -webkit-backdrop-filter:blur(14px);
+    border-radius:var(--r-md);
+    padding:9px 14px; min-width:96px;
+  }
+  .stat .label{ font-size:10px; letter-spacing:.18em; text-transform:uppercase; color:var(--ink-dim); font-weight:700; }
+  .stat .value{ font-size:24px; font-weight:800; line-height:1.05; font-variant-numeric:tabular-nums; }
+  .stat .value.score{ color:var(--neon); text-shadow:0 0 18px rgba(25,240,200,.45); }
+  .stat .value.wave{ color:var(--neon-2); text-shadow:0 0 18px rgba(122,92,255,.45); }
+
+  /* Revive pill — top center, only when available */
+  #reviveHud{
+    pointer-events:auto;
+    align-self:center; margin-top:10px;
+    display:none; align-items:center; gap:8px;
+    background:linear-gradient(135deg, rgba(255,209,102,.18), rgba(255,61,129,.12));
+    border:1px solid rgba(255,209,102,.5);
+    color:var(--gold); font-weight:800; font-size:13px; letter-spacing:.02em;
+    padding:8px 14px; border-radius:999px; cursor:pointer;
+    box-shadow:0 0 28px rgba(255,209,102,.22);
+  }
+
+  /* ---- Generic overlay panels ---- */
+  .overlay{
+    position:absolute; inset:0; z-index:10;
+    display:flex; align-items:center; justify-content:center;
+    padding:24px; text-align:center;
+    background:radial-gradient(130% 120% at 50% 30%, rgba(10,13,24,.35), rgba(5,6,10,.86));
+    backdrop-filter:blur(3px); -webkit-backdrop-filter:blur(3px);
+    opacity:0; pointer-events:none; transition:opacity .28s var(--ease);
+  }
+  .overlay.show{ opacity:1; pointer-events:auto; }
+
+  .panel{
+    width:min(440px, 94vw);
+    background:linear-gradient(180deg, rgba(18,22,38,.92), rgba(10,12,22,.92));
+    border:1px solid var(--glass-line);
+    border-radius:var(--r-lg);
+    box-shadow:var(--shadow);
+    padding:30px 26px;
+    transform:translateY(14px) scale(.98);
+    transition:transform .4s var(--ease);
+  }
+  .overlay.show .panel{ transform:translateY(0) scale(1); }
+
+  /* Wordmark */
+  .wordmark{ font-size:13px; letter-spacing:.42em; color:var(--ink-dim); font-weight:800; text-transform:uppercase; }
+  .logo{
+    font-size:clamp(40px,11vw,64px); font-weight:900; letter-spacing:-.02em; line-height:.92; margin:6px 0 2px;
+    background:linear-gradient(120deg, var(--neon), var(--neon-2) 70%);
+    -webkit-background-clip:text; background-clip:text; color:transparent;
+    filter:drop-shadow(0 6px 30px rgba(25,240,200,.25));
+  }
+  .tagline{ color:var(--ink-dim); font-size:14px; margin-bottom:22px; }
+
+  /* Buttons */
+  .btn{
+    -webkit-appearance:none; appearance:none; border:none; cursor:pointer;
+    font-family:var(--font); font-weight:800; font-size:16px; letter-spacing:.01em;
+    color:#04110d; border-radius:14px; padding:15px 22px; width:100%;
+    background:linear-gradient(135deg, var(--neon), #46f7d5);
+    box-shadow:0 10px 30px rgba(25,240,200,.30);
+    transition:transform .12s var(--ease), box-shadow .2s var(--ease), filter .2s;
+  }
+  .btn:active{ transform:translateY(2px) scale(.99); box-shadow:0 6px 16px rgba(25,240,200,.25); }
+  .btn.secondary{
+    background:var(--glass); color:var(--ink); border:1px solid var(--glass-line);
+    box-shadow:none; font-weight:700;
+  }
+  .btn.revive{
+    background:linear-gradient(135deg, var(--gold), #ff8e53);
+    color:#1a1102; box-shadow:0 10px 30px rgba(255,160,80,.35);
+  }
+  .btn.danger-ghost{ background:transparent; color:var(--neon-3); border:1px solid rgba(255,61,129,.4); box-shadow:none; }
+  .btn-row{ display:flex; gap:10px; margin-top:10px; }
+  .btn-row .btn{ width:auto; flex:1; }
+
+  /* ---- Onboarding (2s interactive) ---- */
+  #onboard .panel{ background:transparent; border:none; box-shadow:none; }
+  .gesture{
+    width:120px; height:120px; margin:0 auto 18px; position:relative;
+  }
+  .gesture .ring{
+    position:absolute; inset:0; border-radius:50%;
+    border:2px solid rgba(25,240,200,.35);
+    animation:ripple 1.6s var(--ease) infinite;
+  }
+  .gesture .ring:nth-child(2){ animation-delay:.5s; }
+  .gesture .dot{
+    position:absolute; top:50%; left:50%; width:26px; height:26px; margin:-13px 0 0 -13px;
+    border-radius:50%; background:var(--neon); box-shadow:0 0 24px var(--neon);
+    animation:swipe 1.6s var(--ease) infinite;
+  }
+  @keyframes ripple{ 0%{transform:scale(.4);opacity:.9} 100%{transform:scale(1.2);opacity:0} }
+  @keyframes swipe{ 0%,100%{transform:translateX(-34px)} 50%{transform:translateX(34px)} }
+  .keys{ display:flex; gap:6px; justify-content:center; margin-top:14px; }
+  .key{
+    width:40px; height:40px; border-radius:10px; display:grid; place-items:center;
+    background:var(--glass); border:1px solid var(--glass-line); font-weight:800; font-size:14px; color:var(--ink-dim);
+  }
+  .key.pulse{ animation:keypulse 1.2s ease-in-out infinite; }
+  .key:nth-child(2){ animation-delay:.2s } .key:nth-child(3){ animation-delay:.4s } .key:nth-child(4){ animation-delay:.6s }
+  @keyframes keypulse{ 0%,100%{color:var(--ink-dim);border-color:var(--glass-line)} 50%{color:var(--neon);border-color:var(--neon);box-shadow:0 0 16px rgba(25,240,200,.4)} }
+
+  /* ---- Benchmark leaderboard widget ---- */
+  .bench{
+    background:var(--glass); border:1px solid var(--glass-line);
+    border-radius:var(--r-md); padding:14px 16px; margin:4px 0 16px; text-align:left;
+  }
+  .bench .pct{ font-size:30px; font-weight:900; color:var(--neon); line-height:1; text-shadow:0 0 18px rgba(25,240,200,.4); }
+  .bench .pct b{ color:var(--ink); }
+  .bench .sub{ font-size:13px; color:var(--ink-dim); margin-top:4px; }
+  .bench .bar{ height:8px; border-radius:6px; background:rgba(255,255,255,.08); margin-top:12px; overflow:hidden; }
+  .bench .bar > i{ display:block; height:100%; width:0%;
+    background:linear-gradient(90deg, var(--neon), var(--neon-2)); border-radius:6px;
+    transition:width 1s var(--ease); }
+  .bench .state-row{ display:flex; align-items:center; gap:8px; margin-top:12px; }
+  .bench select, .tag-input{
+    -webkit-appearance:none; appearance:none; background:rgba(0,0,0,.25);
+    border:1px solid var(--glass-line); color:var(--ink); border-radius:10px;
+    padding:11px 12px; font-family:var(--font); font-size:14px; font-weight:600; width:100%;
+  }
+  .tag-input{ text-transform:uppercase; letter-spacing:.12em; }
+
+  .gameover-score{ display:flex; justify-content:space-around; margin:6px 0 14px; }
+  .gameover-score .blk .v{ font-size:34px; font-weight:900; color:var(--neon); font-variant-numeric:tabular-nums; }
+  .gameover-score .blk .v.alt{ color:var(--neon-2); }
+  .gameover-score .blk .l{ font-size:10px; letter-spacing:.18em; text-transform:uppercase; color:var(--ink-dim); font-weight:700; }
+  .crashword{ font-size:13px; letter-spacing:.34em; color:var(--neon-3); font-weight:800; text-transform:uppercase; }
+  h2.title{ font-size:30px; font-weight:900; letter-spacing:-.01em; margin:2px 0 12px; }
+
+  .challenge-note{ font-size:12px; color:var(--ink-dim); margin-top:14px; line-height:1.5; }
+  .toast{
+    position:absolute; left:50%; bottom:34px; transform:translateX(-50%) translateY(20px);
+    z-index:30; background:rgba(18,22,38,.95); border:1px solid var(--glass-line);
+    color:var(--ink); font-size:13px; font-weight:600; padding:11px 18px; border-radius:999px;
+    box-shadow:var(--shadow); opacity:0; pointer-events:none; transition:all .3s var(--ease);
+  }
+  .toast.show{ opacity:1; transform:translateX(-50%) translateY(0); }
+
+  .loader{
+    position:absolute; inset:0; z-index:40; display:grid; place-items:center; background:var(--bg-0);
+    transition:opacity .5s var(--ease); }
+  .loader.hide{ opacity:0; pointer-events:none; }
+  .loader .spin{ width:46px; height:46px; border-radius:50%;
+    border:3px solid rgba(25,240,200,.18); border-top-color:var(--neon); animation:rot .8s linear infinite; }
+  @keyframes rot{ to{ transform:rotate(360deg) } }
+
+  .footnote{ font-size:11px; color:var(--ink-dim); margin-top:16px; opacity:.7 }
+  .footnote.privacy{ margin-top:14px; line-height:1.5; opacity:.6 }
+  .footnote.privacy a{ color:var(--neon); text-decoration:none; }
+  .ad-slot{ min-height:0; margin-top:14px; display:flex; justify-content:center; }
+  .ad-slot:empty{ display:none; }
+  .pill-best{ display:inline-block; font-size:11px; font-weight:800; letter-spacing:.1em; color:var(--gold);
+    border:1px solid rgba(255,209,102,.35); border-radius:999px; padding:4px 10px; margin-bottom:10px; text-transform:uppercase; }
+</style>
+</head>
+<body>
+  <!-- ============ CANVAS STAGE ============ -->
+  <canvas id="stage"></canvas>
+  <div id="grain"></div>
+
+  <!-- ============ IN-GAME HUD ============ -->
+  <div id="hud">
+    <div class="hud-row">
+      <div class="stat"><div class="label">Score</div><div class="value score" id="hudScore">0</div></div>
+      <div class="stat" style="text-align:right"><div class="label">Wave</div><div class="value wave" id="hudWave">1</div></div>
+    </div>
+    <div id="reviveHud">⚡ Revive ready · tap to bank it</div>
+  </div>
+
+  <!-- ============ ONBOARDING (2s) ============ -->
+  <div class="overlay" id="onboard">
+    <div class="panel">
+      <div class="gesture" id="gestureTouch">
+        <div class="ring"></div><div class="ring"></div><div class="dot"></div>
+      </div>
+      <div class="keys" id="gestureKeys">
+        <div class="key pulse">W</div><div class="key pulse">A</div><div class="key pulse">S</div><div class="key pulse">D</div>
+      </div>
+      <p class="tagline" id="onboardHint" style="margin-top:18px">Steer to stay on the grid</p>
+    </div>
+  </div>
+
+  <!-- ============ START MENU ============ -->
+  <div class="overlay show" id="menu">
+    <div class="panel">
+      <div class="wordmark">CrazyGames · Reflex</div>
+      <div class="logo">NEON<br>DRIFT</div>
+      <p class="tagline">One lane. Infinite grid. How long can your reflexes survive?</p>
+      <div class="pill-best" id="menuBest" style="display:none"></div>
+      <button class="btn" id="btnPlay">▶ &nbsp;Play</button>
+      <div class="btn-row">
+        <button class="btn secondary" id="btnHow">How to play</button>
+        <button class="btn secondary" id="btnSound">🔊 Sound</button>
+      </div>
+      <p class="footnote" id="challengeBanner"></p>
+      <div id="adBanner" class="ad-slot" aria-hidden="true"></div>
+      <p class="footnote privacy">
+        No account needed — you play as a guest. We store only your score &amp; tag
+        on this device (no tracking cookies, no personal data).
+        <a href="https://www.crazygames.com/privacy" target="_blank" rel="noopener">Privacy</a>
+      </p>
+    </div>
+  </div>
+
+  <!-- ============ GAME OVER + MARKETING ENGINE ============ -->
+  <div class="overlay" id="gameover">
+    <div class="panel">
+      <div class="crashword" id="crashWord">CRASHED</div>
+      <h2 class="title">So close.</h2>
+
+      <div class="gameover-score">
+        <div class="blk"><div class="v" id="goScore">0</div><div class="l">Score</div></div>
+        <div class="blk"><div class="v alt" id="goWave">1</div><div class="l">Wave</div></div>
+        <div class="blk"><div class="v" id="goBest" style="color:var(--gold)">0</div><div class="l">Best</div></div>
+      </div>
+
+      <!-- US STATE BENCHMARK WIDGET -->
+      <div class="bench">
+        <div class="pct"><span id="benchPct">0</span>% <b>faster</b></div>
+        <div class="sub" id="benchSub">than players in <b>your state</b></div>
+        <div class="bar"><i id="benchBar"></i></div>
+        <div class="state-row">
+          <select id="stateSelect" aria-label="Your state"></select>
+        </div>
+        <div class="state-row">
+          <input class="tag-input" id="tagInput" maxlength="10" placeholder="ENTER TAG TO CLAIM RANK" />
+        </div>
+      </div>
+
+      <button class="btn revive" id="btnRevive">⚡ &nbsp;Revive — Watch Ad (1 left)</button>
+      <button class="btn" id="btnRetry" style="margin-top:10px">↻ &nbsp;Try Again</button>
+      <div class="btn-row">
+        <button class="btn secondary" id="btnChallenge">📸 Flex / Challenge</button>
+        <button class="btn secondary" id="btnMenu">Menu</button>
+      </div>
+      <p class="challenge-note" id="claimNote"></p>
+    </div>
+  </div>
+
+  <!-- ============ LOADER ============ -->
+  <div class="loader" id="loader"><div class="spin"></div></div>
+
+  <!-- ============ TOAST ============ -->
+  <div class="toast" id="toast"></div>
+
+<script>
+"use strict";
+/* ════════════════════════════════════════════════════════════════════════
+   NEON DRIFT  —  Endless reflex driving rush for CrazyGames
+   Single-file, zero image assets, procedural Canvas. Vanilla JS.
+   Sections:
+     0. Log     1. Config   2. SDK wrapper   3. Storage   4. Audio
+     5. Input   6. Particles 7. Game core    8. Render    9. UI/Engine
+   ════════════════════════════════════════════════════════════════════════ */
+
+/* ───────────────────────── 0. PRODUCTION LOG ───────────────────────────── */
+const Log = (() => {
+  const PREFIX = "%c[NEON DRIFT]";
+  const STY = "color:#19f0c8;font-weight:700";
+  const on = true; // flip to false to silence in production
+  return {
+    info: (...a) => on && console.log(PREFIX, STY, ...a),
+    warn: (...a) => on && console.warn(PREFIX, STY, ...a),
+    err:  (...a) => console.error(PREFIX, STY, ...a),
+  };
+})();
+
+/* ───────────────────────── 1. CONFIG ───────────────────────────────────── */
+const CONFIG = {
+  version: "1.1.0",
+  // ── EFFORTLESS PROGRESSION (rule 3 & 15): gentle ramp, generous lanes ──
+  baseSpeed: 270,           // calm, confident starting pace
+  speedPerWave: 30,         // softer acceleration → players keep winning
+  speedCap: 720,            // ceiling so it never becomes unfair
+  waveEveryPts: 160,        // frequent wave-ups = constant dopamine pings
+  laneFriction: 13,         // smooth, planted steering
+  steerAccel: 2900,         // responsive, forgiving input
+  maxSteer: 780,            // px/s lateral cap
+  spawnGapBase: 1.15,       // wide breathing room early
+  spawnGapMin: 0.46,        // never claustrophobic — stays beatable
+  collidePad: 0.34,         // forgiving hitbox (lower = more forgiving)
+  horizonY: 0.30,           // horizon as fraction of height
+  roadWidthNear: 0.86,      // road width at player (fraction of width)
+  roadWidthFar: 0.10,       // road width at horizon
+  retryMs: 160,             // <200ms rage-retry transition
+  maxRevives: 1,            // gated revive per run
+  adCooldownMs: 70000,      // min gap between interstitials (SDK-compliant)
+  retriesPerInterstitial: 3,// invisible interstitial cadence (rule 12)
+  storeKey: "neondrift.save.v1",
+};
+
+const STATES = [ // weighted "benchmark" regions — premium social proof
+  "California","Texas","Florida","New York","Ontario","Illinois","Georgia",
+  "Washington","Arizona","Colorado","New South Wales","Victoria","Pennsylvania",
+  "North Carolina","Ohio","Michigan","Quebec","British Columbia","Queensland","Nevada"
+];
+
+/* ───────────────────────── 2. CRAZYGAMES SDK WRAPPER ───────────────────── */
+/* Defensive wrapper: real SDK when on CrazyGames, graceful mock locally. */
+const CG = (() => {
+  let sdk = null, ready = false, mock = false;
+
+  async function init(){
+    try {
+      // Poll briefly for the SDK global (handles async/CDN load timing).
+      let tries=0;
+      while(!(window.CrazyGames && window.CrazyGames.SDK) && tries<30){
+        await new Promise(r=>setTimeout(r,100)); tries++;
+      }
+      if (window.CrazyGames && window.CrazyGames.SDK){
+        sdk = window.CrazyGames.SDK;
+        await sdk.init();
+        ready = true;
+        Log.info("CrazyGames SDK initialised ✓");
+      } else {
+        throw new Error("SDK global not present");
+      }
+    } catch (e){
+      mock = true; ready = true;
+      Log.warn("SDK unavailable — running in LOCAL MOCK mode.", e.message);
+    }
+  }
+
+  // Gameplay analytics signals (improve organic placement / recommendation).
+  const gameplayStart = () => safe(() => sdk.game.gameplayStart(), "gameplayStart");
+  const gameplayStop  = () => safe(() => sdk.game.gameplayStop(),  "gameplayStop");
+  const loadingStart  = () => safe(() => sdk.game.loadingStart(),  "loadingStart");
+  const loadingStop   = () => safe(() => sdk.game.loadingStop(),   "loadingStop");
+  const happyTime     = () => safe(() => sdk.game.happytime(),     "happytime");
+
+  /* Interstitial (midgame) ad — fired invisibly inside fade transitions (rule 12).
+     Always brackets with gameplayStop/gameplayStart per CrazyGames guidelines. */
+  function requestInterstitial(onComplete){
+    const done = ()=>{ try{ if(!mock && ready) sdk.game.gameplayStart(); }catch(_){} onComplete && onComplete(); };
+    if (mock || !sdk?.ad){ Log.info("[MOCK] interstitial (midgame) → skipped"); onComplete && onComplete(); return; }
+    try {
+      sdk.game.gameplayStop();
+      sdk.ad.requestAd("midgame", {
+        adStarted:  () => Log.info("midgame ad started"),
+        adFinished: () => { Log.info("midgame ad finished ✓"); done(); },
+        adError:    (err) => { Log.warn("midgame ad error", err); done(); },
+      });
+    } catch (e){ Log.warn("requestInterstitial threw", e); done(); }
+  }
+
+  /* Responsive banner (rule 9) — rendered into a container on idle screens only. */
+  async function requestBanner(containerId){
+    if (mock || !sdk?.banner) return;
+    try { await sdk.banner.requestResponsiveBanner([containerId]); Log.info("banner placed", containerId); }
+    catch(e){ Log.warn("banner failed", e.message); }
+  }
+  function clearBanners(){ try{ if(!mock && sdk?.banner) sdk.banner.clearAllBanners(); }catch(_){} }
+
+  /* Guest-friendly anonymous user system (rule 10 — no PII, consent-safe). */
+  async function getUser(){
+    if (mock || !sdk?.user) return null;
+    try { return await sdk.user.getUser(); } catch { return null; }
+  }
+  function isUserAccountAvailable(){ try{ return !mock && !!sdk?.user?.isUserAccountAvailable; }catch{ return false; } }
+
+  /* Rewarded ad → revive. Mirrors window.CrazyGames.SDK.ad.requestAd("rewarded", cbs) */
+  function requestAd(onDone, onError){
+    if (mock || !sdk?.ad){
+      Log.info("[MOCK] rewarded ad → instant grant");
+      // simulate the real ad lifecycle timing for honest UX testing
+      setTimeout(onDone, 450);
+      return;
+    }
+    try {
+      sdk.ad.requestAd("rewarded", {
+        adStarted: () => Log.info("ad started"),
+        adFinished: () => { Log.info("ad finished ✓"); onDone(); },
+        adError: (err) => { Log.warn("ad error", err); (onError||onDone)(err); },
+      });
+    } catch (e){
+      Log.warn("requestAd threw", e); (onError||onDone)(e);
+    }
+  }
+
+  /* Asymmetric challenge invite link with seed + score payload. */
+  async function inviteLink(params){
+    if (mock || !sdk?.game?.inviteLink){
+      const url = location.origin + location.pathname + "?" +
+        new URLSearchParams(params).toString();
+      return url;
+    }
+    try { return await sdk.game.inviteLink(params); }
+    catch(e){ Log.warn("inviteLink failed", e);
+      return location.href.split("?")[0] + "?" + new URLSearchParams(params).toString(); }
+  }
+
+  /* Read incoming challenge params (the friend who clicked the link). */
+  function getInviteParam(key){
+    try { return sdk?.game?.getInviteParam ? sdk.game.getInviteParam(key) : new URLSearchParams(location.search).get(key); }
+    catch { return new URLSearchParams(location.search).get(key); }
+  }
+
+  function safe(fn, name){ try{ if(!mock && ready) fn(); }catch(e){ Log.warn(name+" failed", e.message); } }
+
+  return { init, gameplayStart, gameplayStop, loadingStart, loadingStop, happyTime,
+           requestAd, requestInterstitial, requestBanner, clearBanners,
+           getUser, isUserAccountAvailable,
+           inviteLink, getInviteParam, get isMock(){ return mock; } };
+})();
+
+/* ───────────────────────── 3. STORAGE (with fallback) ──────────────────── */
+const Store = (() => {
+  let mem = {}; let usable = true;
+  try { const k="__nd_t"; localStorage.setItem(k,"1"); localStorage.removeItem(k); }
+  catch { usable=false; Log.warn("localStorage blocked — using in-memory fallback."); }
+
+  function load(){
+    if(!usable) return mem;
+    try { return JSON.parse(localStorage.getItem(CONFIG.storeKey)) || {}; }
+    catch { return {}; }
+  }
+  function save(obj){
+    if(!usable){ mem = obj; return; }
+    try { localStorage.setItem(CONFIG.storeKey, JSON.stringify(obj)); }
+    catch(e){ usable=false; mem=obj; Log.warn("save failed → memory", e.message); }
+  }
+  const data = load();
+  return {
+    get best(){ return data.best||0; },
+    set best(v){ data.best=v; save(data); },
+    get tag(){ return data.tag||""; },
+    set tag(v){ data.tag=v; save(data); },
+    get state(){ return data.state||STATES[0]; },
+    set state(v){ data.state=v; save(data); },
+    get muted(){ return !!data.muted; },
+    set muted(v){ data.muted=v; save(data); },
+    get seenOnboard(){ return !!data.seenOnboard; },
+    set seenOnboard(v){ data.seenOnboard=v; save(data); },
+  };
+})();
+
+/* ───────────────────────── 4. AUDIO (procedural, zero assets) ──────────── */
+const Audio2 = (() => {
+  let ctx=null, master=null, muted=Store.muted, musicGain=null, osc=null;
+  function ensure(){
+    if(ctx) return;
+    try{
+      ctx = new (window.AudioContext||window.webkitAudioContext)();
+      master = ctx.createGain(); master.gain.value = muted?0:0.5; master.connect(ctx.destination);
+      musicGain = ctx.createGain(); musicGain.gain.value = 0.0; musicGain.connect(master);
+    }catch(e){ Log.warn("WebAudio unavailable", e.message); }
+  }
+  function blip(freq=440, dur=0.08, type="square", vol=0.25){
+    if(!ctx||muted) return;
+    const o=ctx.createOscillator(), g=ctx.createGain();
+    o.type=type; o.frequency.value=freq;
+    g.gain.setValueAtTime(vol, ctx.currentTime);
+    g.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime+dur);
+    o.connect(g); g.connect(master); o.start(); o.stop(ctx.currentTime+dur);
+  }
+  function crash(){
+    if(!ctx||muted) return;
+    const o=ctx.createOscillator(), g=ctx.createGain();
+    o.type="sawtooth"; o.frequency.setValueAtTime(220, ctx.currentTime);
+    o.frequency.exponentialRampToValueAtTime(40, ctx.currentTime+0.5);
+    g.gain.setValueAtTime(0.4, ctx.currentTime);
+    g.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime+0.55);
+    o.connect(g); g.connect(master); o.start(); o.stop(ctx.currentTime+0.55);
+  }
+  // soft synth pad as "music bed"
+  function musicOn(){
+    if(!ctx||muted) return;
+    if(osc) return;
+    osc=ctx.createOscillator(); const lfo=ctx.createOscillator(); const lg=ctx.createGain();
+    osc.type="triangle"; osc.frequency.value=110;
+    lfo.frequency.value=0.15; lg.gain.value=8; lfo.connect(lg); lg.connect(osc.frequency);
+    osc.connect(musicGain); osc.start(); lfo.start();
+    musicGain.gain.linearRampToValueAtTime(0.06, ctx.currentTime+1.2);
+  }
+  function musicDuck(on){ if(musicGain&&ctx) musicGain.gain.linearRampToValueAtTime(on?0.0:0.06, ctx.currentTime+0.15); }
+  function setMuted(m){ muted=m; Store.muted=m; if(master&&ctx) master.gain.linearRampToValueAtTime(m?0:0.5, ctx.currentTime+0.1); }
+  return { ensure, blip, crash, musicOn, musicDuck, setMuted, get muted(){return muted;} };
+})();
+
+/* ───────────────────────── 5. INPUT (kbd + touch + tilt) ───────────────── */
+const Input = (() => {
+  const keys = {};
+  let pointerActive=false, pointerX=0, targetFromPointer=null, usingTouch=false;
+  function onKey(e, down){
+    const k=e.key.toLowerCase();
+    if(["arrowleft","arrowright","arrowup","arrowdown","a","d","w","s"," "].includes(k)){
+      keys[k]=down; if(down) e.preventDefault();
+    }
+  }
+  window.addEventListener("keydown", e=>onKey(e,true), {passive:false});
+  window.addEventListener("keyup",   e=>onKey(e,false));
+
+  function pointerXFromEvent(e){
+    const t = e.touches ? e.touches[0] : e;
+    return t.clientX;
+  }
+  function down(e){ pointerActive=true; usingTouch = !!e.touches; pointerX=pointerXFromEvent(e); }
+  function move(e){ if(pointerActive){ pointerX=pointerXFromEvent(e); } }
+  function up(){ pointerActive=false; }
+  const stage = document.getElementById("stage");
+  stage.addEventListener("touchstart", down, {passive:true});
+  stage.addEventListener("touchmove",  move, {passive:true});
+  stage.addEventListener("touchend",   up);
+  stage.addEventListener("mousedown",  down);
+  window.addEventListener("mousemove", move);
+  window.addEventListener("mouseup",   up);
+
+  return {
+    get left(){ return keys["arrowleft"]||keys["a"]; },
+    get right(){ return keys["arrowright"]||keys["d"]; },
+    get pointerActive(){ return pointerActive; },
+    get pointerX(){ return pointerX; },
+    get usingTouch(){ return usingTouch; },
+    clear(){ for(const k in keys) keys[k]=false; pointerActive=false; },
+  };
+})();
+
+/* ───────────────────────── 6. PARTICLES ────────────────────────────────── */
+class Particles {
+  constructor(){ this.p=[]; }
+  burst(x,y,color,count,spread,speed){
+    for(let i=0;i<count;i++){
+      const a=Math.random()*Math.PI*2, s=speed*(0.3+Math.random());
+      this.p.push({x,y,vx:Math.cos(a)*s*spread,vy:Math.sin(a)*s*spread,
+        life:1,decay:0.012+Math.random()*0.03,color,size:1+Math.random()*3});
+    }
+  }
+  update(dt){
+    for(let i=this.p.length-1;i>=0;i--){
+      const q=this.p[i];
+      q.x+=q.vx*dt; q.y+=q.vy*dt; q.vy+=420*dt; q.life-=q.decay*60*dt;
+      if(q.life<=0) this.p.splice(i,1);
+    }
+  }
+  draw(ctx){
+    for(const q of this.p){
+      ctx.globalAlpha=Math.max(0,q.life);
+      ctx.fillStyle=q.color;
+      ctx.fillRect(q.x, q.y, q.size, q.size);
+    }
+    ctx.globalAlpha=1;
+  }
+  get count(){ return this.p.length; }
+}
+
+/* ───────────────────────── 7. GAME CORE ────────────────────────────────── */
+const canvas = document.getElementById("stage");
+const ctx = canvas.getContext("2d");
+
+const Game = {
+  W:0, H:0, dpr:1,
+  running:false, dead:false,
+  t:0, score:0, scoreFloat:0, wave:1, speed:CONFIG.baseSpeed,
+  seed:0, rng:null,
+  playerX:0, playerVX:0, playerW:46,
+  obstacles:[], spawnTimer:0, spawnGap:CONFIG.spawnGapBase,
+  shake:0, dust:new Particles(), streams:[],
+  revivesUsed:0, roadCurve:0, curveTarget:0, curveTimer:0,
+  invuln:0,
+
+  resize(){
+    this.dpr = Math.min(window.devicePixelRatio||1, 2);
+    this.W = window.innerWidth; this.H = window.innerHeight;
+    canvas.width = this.W*this.dpr; canvas.height = this.H*this.dpr;
+    canvas.style.width=this.W+"px"; canvas.style.height=this.H+"px";
+    ctx.setTransform(this.dpr,0,0,this.dpr,0,0);
+    this.initStreams();
+  },
+
+  initStreams(){
+    // matrix-style lightweight vertical particle streams (background depth)
+    this.streams = [];
+    const n = Math.max(18, Math.floor(this.W/42));
+    for(let i=0;i<n;i++){
+      this.streams.push({ x:Math.random()*this.W, y:Math.random()*this.H,
+        len:30+Math.random()*90, sp:60+Math.random()*120, a:0.05+Math.random()*0.12 });
+    }
+  },
+
+  // deterministic PRNG (mulberry32) for shareable seeds
+  makeRng(seed){ let a=seed>>>0; return ()=>{ a|=0; a=a+0x6D2B79F5|0;
+    let t=Math.imul(a^a>>>15,1|a); t=t+Math.imul(t^t>>>7,61|t)^t; return ((t^t>>>14)>>>0)/4294967296; }; },
+
+  reset(seed){
+    this.seed = seed || (Math.floor(Math.random()*1e9));
+    this.rng = this.makeRng(this.seed);
+    this.t=0; this.score=0; this.scoreFloat=0; this.wave=1;
+    this.speed=CONFIG.baseSpeed; this.dead=false;
+    this.playerX=0; this.playerVX=0;
+    this.obstacles=[]; this.spawnTimer=0; this.spawnGap=CONFIG.spawnGapBase;
+    this.shake=0; this.dust=new Particles(); this.revivesUsed=0;
+    this.roadCurve=0; this.curveTarget=0; this.curveTimer=0; this.invuln=0.6;
+  },
+
+  roadGeom(){
+    const cx = this.W/2;
+    const nearW = this.W*CONFIG.roadWidthNear;
+    const farW  = this.W*CONFIG.roadWidthFar;
+    const horizon = this.H*CONFIG.horizonY;
+    return { cx, nearW, farW, horizon };
+  },
+
+  // map a depth 0(far)..1(near) to screen-space road center + half width
+  roadAt(depth){
+    const g=this.roadGeom();
+    const y = g.horizon + (this.H - g.horizon)*depth;
+    const hw = (g.farW + (g.nearW-g.farW)*depth)/2;
+    // curve offset increases toward horizon (perspective bend)
+    const cxOff = this.roadCurve * (1-depth) * (1-depth) * this.W*0.5;
+    return { y, cx:g.cx + cxOff, hw };
+  },
+
+  spawnRow(){
+    // EFFORTLESS PROGRESSION: always leave a clear path + a second safe gap.
+    const slots = 5;
+    const gapSlot = Math.floor(this.rng()*slots);
+    // a second guaranteed opening adjacent-ish to the first keeps it winnable
+    let gap2 = (gapSlot + 1 + Math.floor(this.rng()*(slots-1))) % slots;
+    // early waves: even more generous
+    const skipChance = this.wave<4 ? 0.35 : this.wave<8 ? 0.18 : 0.06;
+    for(let s=0;s<slots;s++){
+      if(s===gapSlot || s===gap2) continue;
+      if(this.rng()<skipChance) continue;
+      this.obstacles.push({ depth:0, slot:s, slots, alive:true });
+    }
+  },
+
+  update(dt){
+    if(!this.running) { this.updateStreams(dt); return; }
+    this.t += dt;
+    if(this.invuln>0) this.invuln-=dt;
+
+    // ── speed + wave progression ──
+    this.scoreFloat += this.speed*dt*0.06;
+    this.score = Math.floor(this.scoreFloat);
+    const newWave = 1 + Math.floor(this.score/CONFIG.waveEveryPts);
+    if(newWave!==this.wave){
+      this.wave=newWave;
+      this.speed = Math.min(CONFIG.speedCap, CONFIG.baseSpeed + (this.wave-1)*CONFIG.speedPerWave);
+      this.spawnGap = Math.max(CONFIG.spawnGapMin, CONFIG.spawnGapBase - (this.wave-1)*0.05);
+      Audio2.blip(660+this.wave*20,0.12,"square",0.2);
+      UI.flashWave();
+    }
+
+    // ── road curve wander ──
+    this.curveTimer-=dt;
+    if(this.curveTimer<=0){ this.curveTarget=(this.rng()*2-1)*Math.min(0.6,0.15+this.wave*0.03); this.curveTimer=1.6+this.rng()*2; }
+    this.roadCurve += (this.curveTarget-this.roadCurve)*Math.min(1,dt*1.4);
+
+    // ── steering (keyboard or pointer) ──
+    let dir=0;
+    if(Input.left) dir-=1; if(Input.right) dir+=1;
+    if(Input.pointerActive){
+      const g=this.roadAt(1);
+      const targetX = Input.pointerX - g.cx;
+      const diff = targetX - this.playerX;
+      this.playerVX = Math.max(-CONFIG.maxSteer*1.6, Math.min(CONFIG.maxSteer*1.6, diff*9));
+    } else {
+      this.playerVX += dir*CONFIG.steerAccel*dt;
+      this.playerVX *= Math.exp(-CONFIG.laneFriction*dt);
+      this.playerVX = Math.max(-CONFIG.maxSteer, Math.min(CONFIG.maxSteer, this.playerVX));
+    }
+    this.playerX += this.playerVX*dt;
+
+    // clamp to road at player depth
+    const near=this.roadAt(1);
+    const limit = near.hw - this.playerW*0.5 - 4;
+    const relCx = near.cx - this.W/2; // curve shift at near plane (≈0)
+    const minX = -limit + relCx, maxX = limit + relCx;
+    let offRoad=false;
+    if(this.playerX<minX){ this.playerX=minX; this.playerVX=0; offRoad=true; }
+    if(this.playerX>maxX){ this.playerX=maxX; this.playerVX=0; offRoad=true; }
+
+    // ── spawn ──
+    this.spawnTimer+=dt;
+    if(this.spawnTimer>=this.spawnGap){ this.spawnTimer=0; this.spawnRow(); }
+
+    // ── move obstacles toward player & collide ──
+    const depthSpeed = (this.speed/ this.H) * 1.15;
+    for(const o of this.obstacles){
+      o.depth += depthSpeed*dt*(0.5+o.depth*0.9); // accelerate as approaching (perspective)
+      if(o.depth>=0.86 && o.depth<=1.04 && o.alive && this.invuln<=0){
+        // resolve obstacle screen position
+        const r=this.roadAt(Math.min(1,o.depth));
+        const slotW=(r.hw*2)/o.slots;
+        const ox = r.cx - r.hw + slotW*(o.slot+0.5) - this.W/2;
+        const ow = slotW*0.84;
+        const px = this.playerX, pw=this.playerW;
+        if(Math.abs(px-ox) < (pw+ow)*CONFIG.collidePad){ this.die(); return; }
+      }
+    }
+    this.obstacles = this.obstacles.filter(o=>o.depth<1.15);
+
+    // dust trail
+    if(Math.abs(this.playerVX)>180 && Math.random()<0.5){
+      const r=this.roadAt(1);
+      this.dust.burst(r.cx+this.playerX, r.y-6, "rgba(25,240,200,0.7)",1,0.4,60);
+    }
+
+    this.shake *= Math.exp(-9*dt);
+    this.dust.update(dt);
+    this.updateStreams(dt);
+  },
+
+  updateStreams(dt){
+    for(const s of this.streams){
+      s.y += s.sp*dt*(this.running?2.2:0.6);
+      if(s.y - s.len > this.H){ s.y=-s.len; s.x=Math.random()*this.W; }
+    }
+  },
+
+  die(){
+    if(this.dead) return;
+    this.dead=true; this.running=false;
+    Audio2.crash(); Audio2.musicDuck(true);
+    this.shake=26;
+    const r=this.roadAt(1);
+    this.dust.burst(r.cx+this.playerX, r.y-10, "#ff3d81", 60, 1.3, 320);
+    this.dust.burst(r.cx+this.playerX, r.y-10, "#ffd166", 28, 1.0, 240);
+    this.dust.burst(r.cx+this.playerX, r.y-10, "#19f0c8", 26, 0.9, 200);
+    Log.info(`crash · score=${this.score} wave=${this.wave} seed=${this.seed}`);
+    CG.gameplayStop();
+    UI.onGameOver();
+  },
+
+  revive(){
+    // restore a clean clamped state; clear nearby obstacles; brief invuln
+    this.dead=false; this.running=true; this.invuln=1.4;
+    this.playerVX=0;
+    this.obstacles = this.obstacles.filter(o=>o.depth<0.45);
+    this.shake=6; Audio2.musicDuck(false);
+    CG.gameplayStart();
+    Log.info("revived");
+  },
+};
+
+/* ───────────────────────── 8. RENDER ───────────────────────────────────── */
+function render(){
+  const {W,H}=Game;
+  ctx.save();
+  // screen shake
+  if(Game.shake>0.2){
+    ctx.translate((Math.random()-0.5)*Game.shake,(Math.random()-0.5)*Game.shake);
+  }
+
+  // ── background gradient ──
+  const bg=ctx.createLinearGradient(0,0,0,H);
+  bg.addColorStop(0,"#070912"); bg.addColorStop(0.45,"#0a0d1b"); bg.addColorStop(1,"#05060a");
+  ctx.fillStyle=bg; ctx.fillRect(-40,-40,W+80,H+80);
+
+  // ── matrix particle streams (depth) ──
+  for(const s of Game.streams){
+    const grad=ctx.createLinearGradient(0,s.y,0,s.y+s.len);
+    grad.addColorStop(0,"rgba(25,240,200,0)"); grad.addColorStop(1,`rgba(25,240,200,${s.a})`);
+    ctx.strokeStyle=grad; ctx.lineWidth=1.4;
+    ctx.beginPath(); ctx.moveTo(s.x,s.y); ctx.lineTo(s.x,s.y+s.len); ctx.stroke();
+  }
+
+  const g=Game.roadGeom();
+
+  // ── distant sun / horizon glow ──
+  const sun=ctx.createRadialGradient(W/2,g.horizon,0,W/2,g.horizon,W*0.5);
+  sun.addColorStop(0,"rgba(122,92,255,0.25)"); sun.addColorStop(0.5,"rgba(122,92,255,0.06)"); sun.addColorStop(1,"transparent");
+  ctx.fillStyle=sun; ctx.fillRect(0,0,W,g.horizon+60);
+
+  // ── road body (perspective trapezoid w/ curve) ──
+  const near=Game.roadAt(1), far=Game.roadAt(0);
+  ctx.beginPath();
+  ctx.moveTo(far.cx-far.hw, far.y);
+  ctx.lineTo(far.cx+far.hw, far.y);
+  ctx.lineTo(near.cx+near.hw, near.y);
+  ctx.lineTo(near.cx-near.hw, near.y);
+  ctx.closePath();
+  const roadGrad=ctx.createLinearGradient(0,far.y,0,near.y);
+  roadGrad.addColorStop(0,"#0c1226"); roadGrad.addColorStop(1,"#11183a");
+  ctx.fillStyle=roadGrad; ctx.fill();
+
+  // road neon edges
+  ctx.lineWidth=3; ctx.strokeStyle="rgba(25,240,200,0.9)";
+  ctx.shadowColor="rgba(25,240,200,0.8)"; ctx.shadowBlur=18;
+  ctx.beginPath();
+  ctx.moveTo(far.cx-far.hw,far.y); ctx.lineTo(near.cx-near.hw,near.y);
+  ctx.moveTo(far.cx+far.hw,far.y); ctx.lineTo(near.cx+near.hw,near.y);
+  ctx.stroke(); ctx.shadowBlur=0;
+
+  // ── perspective grid lines (animated depth) ──
+  ctx.strokeStyle="rgba(122,92,255,0.25)"; ctx.lineWidth=1;
+  const scroll=(Game.t* (Game.speed/220))%1;
+  for(let i=0;i<14;i++){
+    let d=((i/14)+scroll)%1;
+    const r=Game.roadAt(d);
+    ctx.globalAlpha=0.15+d*0.5;
+    ctx.beginPath(); ctx.moveTo(r.cx-r.hw,r.y); ctx.lineTo(r.cx+r.hw,r.y); ctx.stroke();
+  }
+  ctx.globalAlpha=1;
+
+  // ── obstacles (neon gates / blocks) ──
+  for(const o of Game.obstacles){
+    if(o.depth<=0) continue;
+    const d=Math.min(1,o.depth);
+    const r=Game.roadAt(d);
+    const slotW=(r.hw*2)/o.slots;
+    const ox=r.cx - r.hw + slotW*(o.slot+0.5);
+    const w=slotW*0.84;
+    const h=Math.max(10, 60*d);
+    const alpha=0.35+d*0.65;
+    ctx.globalAlpha=alpha;
+    ctx.fillStyle = d>0.5 ? "rgba(255,61,129,0.9)" : "rgba(255,61,129,0.5)";
+    ctx.shadowColor="rgba(255,61,129,0.9)"; ctx.shadowBlur=d*22;
+    roundRect(ctx, ox-w/2, r.y-h, w, h, Math.min(8,6*d)); ctx.fill();
+    ctx.shadowBlur=0; ctx.globalAlpha=1;
+  }
+
+  // ── dust / crash particles ──
+  Game.dust.draw(ctx);
+
+  // ── player car (procedural neon) ──
+  if(!Game.dead || Game.shake>1){
+    const r=Game.roadAt(1);
+    const px=r.cx+Game.playerX, py=r.y-8;
+    drawCar(px,py, Game.playerVX, Game.invuln>0);
+  }
+
+  ctx.restore();
+}
+
+function drawCar(x,y,vx,invuln){
+  const w=Game.playerW, h=58;
+  const tilt = Math.max(-0.22, Math.min(0.22, vx/CONFIG.maxSteer*0.22));
+  ctx.save();
+  ctx.translate(x,y); ctx.rotate(tilt);
+  if(invuln){ ctx.globalAlpha=0.55+Math.sin(Game.t*22)*0.25; }
+  // glow
+  ctx.shadowColor="rgba(25,240,200,0.9)"; ctx.shadowBlur=24;
+  const grad=ctx.createLinearGradient(0,-h,0,0);
+  grad.addColorStop(0,"#aefff0"); grad.addColorStop(1,"#19f0c8");
+  ctx.fillStyle=grad;
+  // body
+  ctx.beginPath();
+  ctx.moveTo(-w*0.38,0); ctx.lineTo(-w*0.30,-h*0.62);
+  ctx.quadraticCurveTo(0,-h, w*0.30,-h*0.62);
+  ctx.lineTo(w*0.38,0);
+  ctx.quadraticCurveTo(0,h*0.12,-w*0.38,0);
+  ctx.closePath(); ctx.fill();
+  ctx.shadowBlur=0;
+  // cockpit
+  ctx.fillStyle="rgba(7,9,18,0.85)";
+  roundRect(ctx,-w*0.18,-h*0.5,w*0.36,h*0.34,6); ctx.fill();
+  // thruster
+  ctx.fillStyle="rgba(122,92,255,0.9)";
+  ctx.fillRect(-w*0.22,2,w*0.44,4);
+  ctx.restore();
+  ctx.globalAlpha=1;
+}
+
+function roundRect(c,x,y,w,h,r){
+  r=Math.min(r,w/2,h/2);
+  c.beginPath();
+  c.moveTo(x+r,y); c.arcTo(x+w,y,x+w,y+h,r); c.arcTo(x+w,y+h,x,y+h,r);
+  c.arcTo(x,y+h,x,y,r); c.arcTo(x,y,x+w,y,r); c.closePath();
+}
+
+/* ───────────────────────── MAIN LOOP ───────────────────────────────────── */
+let last=performance.now();
+function frame(now){
+  let dt=(now-last)/1000; last=now;
+  if(dt>0.05) dt=0.05; // clamp big tab-switch gaps
+  Game.update(dt);
+  render();
+  if(Game.running){ UI.syncHud(); }
+  requestAnimationFrame(frame);
+}
+
+/* ───────────────────────── 9. UI + MARKETING ENGINE ────────────────────── */
+const UI = (() => {
+  const $ = id => document.getElementById(id);
+  const els = {
+    menu:$("menu"), onboard:$("onboard"), gameover:$("gameover"),
+    hud:$("hud"), hudScore:$("hudScore"), hudWave:$("hudWave"),
+    reviveHud:$("reviveHud"), loader:$("loader"), toast:$("toast"),
+    goScore:$("goScore"), goWave:$("goWave"), goBest:$("goBest"),
+    benchPct:$("benchPct"), benchSub:$("benchSub"), benchBar:$("benchBar"),
+    stateSelect:$("stateSelect"), tagInput:$("tagInput"),
+    btnPlay:$("btnPlay"), btnRetry:$("btnRetry"), btnMenu:$("btnMenu"),
+    btnRevive:$("btnRevive"), btnChallenge:$("btnChallenge"),
+    btnHow:$("btnHow"), btnSound:$("btnSound"),
+    crashWord:$("crashWord"), menuBest:$("menuBest"),
+    challengeBanner:$("challengeBanner"), claimNote:$("claimNote"),
+    onboardHint:$("onboardHint"), gestureTouch:$("gestureTouch"), gestureKeys:$("gestureKeys"),
+  };
+  let challengeSeed=null, busyRevive=false, retryCount=0, lastAdAt=0;
+
+  function toast(msg, ms=2200){
+    els.toast.textContent=msg; els.toast.classList.add("show");
+    clearTimeout(toast._t); toast._t=setTimeout(()=>els.toast.classList.remove("show"), ms);
+  }
+  const show = el => el.classList.add("show");
+  const hide = el => el.classList.remove("show");
+
+  function populateStates(){
+    els.stateSelect.innerHTML = STATES.map(s=>`<option ${s===Store.state?"selected":""}>${s}</option>`).join("");
+    els.stateSelect.onchange = ()=>{ Store.state=els.stateSelect.value; renderBench(Game.score); };
+  }
+
+  function init(){
+    populateStates();
+    els.tagInput.value = Store.tag;
+    refreshBest();
+    refreshSoundLabel();
+    detectChallenge();
+    // input-mode aware onboarding
+    if(matchMedia("(pointer:coarse)").matches){ els.gestureKeys.style.display="none"; els.onboardHint.textContent="Drag anywhere to steer"; }
+    else { els.gestureTouch.style.display="none"; els.onboardHint.textContent="Use A/D or ← → to steer"; }
+
+    // events
+    els.btnPlay.onclick     = ()=>{
+      Audio2.ensure(); if(!Audio2.muted) Audio2.musicOn();
+      if(!Store.tag && !Store.seenOnboard){ hide(els.menu); Store.seenOnboard=true; runOnboard(()=>startRun()); }
+      else startRun();
+    };
+    els.btnRetry.onclick    = ()=>rageRetry();
+    els.btnMenu.onclick     = ()=>{ hide(els.gameover); show(els.menu); };
+    els.btnRevive.onclick   = ()=>doRevive();
+    els.btnChallenge.onclick= ()=>shareChallenge();
+    els.btnHow.onclick      = ()=>{ hide(els.menu); runOnboard(()=>startRun()); };
+    els.btnSound.onclick    = ()=>{ Audio2.ensure(); Audio2.setMuted(!Audio2.muted); refreshSoundLabel(); if(!Audio2.muted) Audio2.musicOn(); };
+    els.reviveHud.onclick   = ()=>toast("Revive is banked — use it after a crash!");
+    els.tagInput.oninput    = ()=>{ Store.tag = els.tagInput.value.toUpperCase().replace(/[^A-Z0-9]/g,""); els.tagInput.value=Store.tag; };
+    els.tagInput.onchange   = ()=>{ if(Store.tag){ els.claimNote.textContent=`Rank claimed as ${Store.tag} in ${Store.state}.`; toast(`Tag "${Store.tag}" saved`);} };
+
+    window.addEventListener("resize", ()=>Game.resize());
+    window.addEventListener("orientationchange", ()=>setTimeout(()=>Game.resize(),200));
+    document.addEventListener("visibilitychange", ()=>{ if(document.hidden && Game.running){ /* auto-soft-pause via dt clamp */ } });
+  }
+
+  function refreshBest(){
+    if(Store.best>0){ els.menuBest.style.display="inline-block"; els.menuBest.textContent=`Personal Best · ${Store.best}`; }
+  }
+  function refreshSoundLabel(){ els.btnSound.textContent = Audio2.muted ? "🔇 Sound" : "🔊 Sound"; }
+
+  /* ── Onboarding: ~2s interactive then transition straight into the loop ── */
+  function runOnboard(then){
+    show(els.onboard);
+    Game.running=false;
+    setTimeout(()=>{ hide(els.onboard); then(); }, 2000);
+  }
+
+  /* ── Start a run (optionally from a challenge seed) ── */
+  function startRun(seed){
+    Audio2.ensure(); if(!Audio2.muted){ Audio2.musicOn(); Audio2.musicDuck(false); }
+    hide(els.menu); hide(els.gameover); hide(els.onboard);
+    Game.reset(seed||challengeSeed||null);
+    challengeSeed=null;
+    Game.running=true; Game.dead=false;
+    show(els.hud); updateReviveHud();
+    CG.gameplayStart();
+    Log.info(`run start · seed=${Game.seed}`);
+  }
+
+  /* ── Rage-retry: <200ms transition straight back into action ──
+     INVISIBLE INTERSTITIAL (rule 12): on every Nth retry, and only if the
+     cooldown has elapsed, a midgame ad is played *inside* the fade so it
+     reads as a load transition rather than an interruption.                */
+  function rageRetry(){
+    Input.clear();
+    hide(els.gameover);
+    retryCount++;
+    const now = Date.now();
+    const adDue = retryCount % CONFIG.retriesPerInterstitial === 0
+               && (now - lastAdAt) > CONFIG.adCooldownMs;
+    if(adDue){
+      lastAdAt = now;
+      Audio2.musicDuck(true);
+      CG.requestInterstitial(()=>{ Audio2.musicDuck(false); startRun(); });
+      Log.info("rage-retry → invisible interstitial");
+    } else {
+      setTimeout(()=>{ startRun(); }, CONFIG.retryMs); // <200ms snap-back
+      Log.info(`rage-retry in ${CONFIG.retryMs}ms`);
+    }
+  }
+
+  /* ── Gated revive via CrazyGames rewarded ad ── */
+  function doRevive(){
+    if(busyRevive) return;
+    if(Game.revivesUsed>=CONFIG.maxRevives){ toast("No revives left this run"); return; }
+    busyRevive=true;
+    els.btnRevive.textContent="Loading ad…"; els.btnRevive.disabled=true;
+    // freeze state is already frozen (Game.running=false); mute music during ad
+    Audio2.musicDuck(true);
+    CG.requestAd(
+      /*onDone*/ ()=>{
+        Game.revivesUsed++;
+        busyRevive=false; els.btnRevive.disabled=true;
+        els.btnRevive.style.display="none";
+        hide(els.gameover);
+        Game.revive();
+        show(els.hud); updateReviveHud();
+        CG.happyTime();
+        toast("Back in it — go!");
+      },
+      /*onError*/ ()=>{
+        busyRevive=false; els.btnRevive.disabled=false;
+        els.btnRevive.textContent="⚡ Revive — Watch Ad (1 left)";
+        Audio2.musicDuck(false);
+        toast("Ad unavailable — try again");
+      }
+    );
+  }
+
+  function updateReviveHud(){
+    const left = CONFIG.maxRevives - Game.revivesUsed;
+    els.reviveHud.style.display = left>0 ? "flex" : "none";
+  }
+
+  /* ── Game over screen + benchmark widget ── */
+  function onGameOver(){
+    hide(els.hud);
+    const crashWords=["CRASHED","WIPED OUT","SO CLOSE","GRID DOWN","ALMOST"];
+    els.crashWord.textContent = crashWords[Math.floor(Math.random()*crashWords.length)];
+    els.goScore.textContent=Game.score;
+    els.goWave.textContent=Game.wave;
+    const isBest = Game.score>Store.best;
+    if(isBest){ Store.best=Game.score; }
+    els.goBest.textContent=Store.best;
+
+    // revive availability
+    const canRevive = Game.revivesUsed<CONFIG.maxRevives;
+    els.btnRevive.style.display = canRevive ? "block" : "none";
+    els.btnRevive.disabled=false;
+    els.btnRevive.textContent="⚡ Revive — Watch Ad (1 left)";
+
+    renderBench(Game.score);
+    els.claimNote.textContent = Store.tag ? `Ranked as ${Store.tag} in ${Store.state}.` : "";
+    if(isBest) toast("🏆 New personal best!");
+    show(els.gameover);
+  }
+
+  /* ── US STATE BENCHMARK: deterministic, score-scaled social proof ── */
+  function renderBench(score){
+    // Map score → percentile. Higher score → higher percentile, asymptotic to 99.
+    const pct = Math.max(38, Math.min(99, Math.round(38 + 61*(1-Math.exp(-score/520)))));
+    const state = Store.state;
+    els.benchPct.textContent=pct;
+    els.benchSub.innerHTML=`than players in <b>${state}</b>`;
+    els.benchBar.style.width="0%";
+    requestAnimationFrame(()=>requestAnimationFrame(()=>{ els.benchBar.style.width=pct+"%"; }));
+  }
+
+  /* ── FLEX/SHAME CARD (rules 6, 8, 14): renders a 1080² recordable share
+     image on an offscreen canvas, attaches it to the native share sheet
+     alongside the seeded challenge link. Falls back to link-only.          */
+  function buildFlexCard(){
+    const c=document.createElement("canvas"); c.width=c.height=1080;
+    const x=c.getContext("2d");
+    // bg
+    const bg=x.createLinearGradient(0,0,0,1080);
+    bg.addColorStop(0,"#070912"); bg.addColorStop(1,"#05060a");
+    x.fillStyle=bg; x.fillRect(0,0,1080,1080);
+    // neon glow blobs
+    const glow=(cx,cy,r,col)=>{ const g=x.createRadialGradient(cx,cy,0,cx,cy,r);
+      g.addColorStop(0,col); g.addColorStop(1,"transparent"); x.fillStyle=g; x.fillRect(0,0,1080,1080); };
+    glow(300,260,520,"rgba(25,240,200,0.22)"); glow(820,840,560,"rgba(122,92,255,0.22)");
+    // frame
+    x.strokeStyle="rgba(255,255,255,0.12)"; x.lineWidth=2; x.strokeRect(48,48,984,984);
+    x.textAlign="center";
+    x.fillStyle="#8b97b8"; x.font="700 30px Inter, sans-serif";
+    x.fillText("N E O N   D R I F T  ·  CRAZYGAMES", 540, 150);
+    // verdict line
+    x.fillStyle="#ff3d81"; x.font="800 40px Inter, sans-serif";
+    x.fillText("CAN YOU BEAT THIS RUN?", 540, 235);
+    // big score
+    const grad=x.createLinearGradient(300,0,780,0);
+    grad.addColorStop(0,"#19f0c8"); grad.addColorStop(1,"#7a5cff");
+    x.fillStyle=grad; x.font="900 280px Inter, sans-serif";
+    x.fillText(String(Game.score), 540, 560);
+    x.fillStyle="#8b97b8"; x.font="700 34px Inter, sans-serif";
+    x.fillText("SCORE", 540, 615);
+    // wave + tag chips
+    x.fillStyle="#eaf2ff"; x.font="800 64px Inter, sans-serif";
+    x.fillText(`WAVE ${Game.wave}`, 540, 730);
+    const who = (Store.tag||"A RIVAL")+"  ·  "+Store.state;
+    x.fillStyle="#ffd166"; x.font="700 36px Inter, sans-serif";
+    x.fillText(who.toUpperCase(), 540, 790);
+    // benchmark line (social proof)
+    const pct = Math.max(38, Math.min(99, Math.round(38 + 61*(1-Math.exp(-Game.score/520)))));
+    x.fillStyle="#19f0c8"; x.font="800 44px Inter, sans-serif";
+    x.fillText(`FASTER THAN ${pct}% IN ${Store.state.toUpperCase()}`, 540, 900);
+    x.fillStyle="#8b97b8"; x.font="700 30px Inter, sans-serif";
+    x.fillText("Play free on CrazyGames — beat the seed.", 540, 980);
+    return c;
+  }
+
+  function cardToBlob(c){
+    return new Promise(res=>{ try{ c.toBlob(b=>res(b), "image/png", 0.92); }catch{ res(null); } });
+  }
+
+  /* ── ASYMMETRIC CHALLENGE: seeded invite link + recordable flex card ── */
+  async function shareChallenge(){
+    const params = { seed:String(Game.seed), wave:String(Game.wave), score:String(Game.score),
+                     by:(Store.tag||"A_RIVAL") };
+    const url = await CG.inviteLink(params);
+    const text = `I survived Wave ${Game.wave} (${Game.score} pts) on NEON DRIFT. Beat my track or crash trying ⚔`;
+    CG.happyTime();
+
+    // Try image share first (creator bait / shame card)
+    try{
+      const blob = await cardToBlob(buildFlexCard());
+      const file = blob && new File([blob], "neon-drift-flex.png", {type:"image/png"});
+      if(file && navigator.canShare && navigator.canShare({files:[file]})){
+        await navigator.share({ title:"NEON DRIFT", text, url, files:[file] });
+        toast("Flex card shared!"); Log.info("flex card shared", url); return;
+      }
+    }catch(e){ Log.warn("image share skipped", e.message); }
+
+    // Fallbacks: native text share → clipboard → manual
+    try{
+      if(navigator.share){ await navigator.share({title:"NEON DRIFT", text, url}); toast("Challenge sent!"); }
+      else { await navigator.clipboard.writeText(`${text}\n${url}`); toast("Challenge link copied!"); }
+    }catch(e){
+      try{ await navigator.clipboard.writeText(`${text}\n${url}`); toast("Challenge link copied!"); }
+      catch{ toast("Copy this: "+url, 4000); }
+    }
+    Log.info("challenge shared", url);
+  }
+
+  /* ── Inbound challenge detection ── */
+  function detectChallenge(){
+    const seed=CG.getInviteParam("seed");
+    if(seed){
+      challengeSeed=parseInt(seed,10)||null;
+      const by=CG.getInviteParam("by")||"a rival";
+      const wave=CG.getInviteParam("wave")||"?";
+      els.challengeBanner.innerHTML=`⚔ <b>${by}</b> challenged you to beat <b>Wave ${wave}</b>. Same track. Same seed.`;
+      els.btnPlay.textContent="▶  Accept Challenge";
+      Log.info("inbound challenge seed", challengeSeed);
+    }
+  }
+
+  function flashWave(){
+    els.hudWave.animate(
+      [{transform:"scale(1)",filter:"none"},{transform:"scale(1.35)",filter:"brightness(1.6)"},{transform:"scale(1)"}],
+      {duration:420, easing:"cubic-bezier(.16,1,.3,1)"});
+  }
+
+  function syncHud(){ els.hudScore.textContent=Game.score; els.hudWave.textContent=Game.wave; }
+
+  function bootComplete(){ els.loader.classList.add("hide"); setTimeout(()=>{ els.loader.style.display="none"; },300); }
+
+  /* ── Called once the SDK finishes initialising in the background ──
+     Places a responsive banner on idle screens (rule 9) and greets a
+     signed-in CrazyGames user without ever requiring login (rule 10). */
+  async function onSdkReady(){
+    detectChallenge(); // re-read invite params via the real SDK if available
+    // Responsive banner only on idle screens — never over live gameplay.
+    if(document.getElementById("adBanner")) CG.requestBanner("adBanner");
+    if(CG.isUserAccountAvailable()){
+      const u = await CG.getUser();
+      if(u && u.username && !Store.tag){
+        Store.tag = u.username.toUpperCase().replace(/[^A-Z0-9]/g,"").slice(0,10);
+        els.tagInput.value = Store.tag;
+        toast(`Welcome back, ${Store.tag}`);
+      }
+    }
+  }
+
+  return { init, toast, onGameOver, syncHud, flashWave, bootComplete, runOnboard, onSdkReady };
+})();
+
+/* ───────────────────────── BOOT ────────────────────────────────────────── */
+/* RULE 1 — ZERO-WAIT BOOT: canvas + menu are live on the first frame.
+   The SDK initialises in the background and never blocks gameplay.        */
+(function boot(){
+  Log.info("boot v"+CONFIG.version);
+  Game.resize();
+  UI.init();
+  requestAnimationFrame(frame);   // start rendering immediately
+  UI.bootComplete();              // dismiss the splash on frame 1
+
+  // Non-blocking SDK init — game is already playable.
+  CG.loadingStart();
+  CG.init().then(()=>{
+    CG.loadingStop();
+    UI.onSdkReady();
+    Log.info("ready" + (CG.isMock ? " (mock SDK)" : ""));
+  });
+})();
+</script>
+</body>
+</html>
